@@ -11,13 +11,18 @@ ekf = EKF(3, 2, 2)
 def odom_callback(msg):
     rospy.loginfo("odometry message")
     ekf.predict(msg)
-    #ekf.print_initials()
+    ekf.print_initials()
     #pass
 
 
 def marker_callback(msg):
+    # TODO check length of msg came and perform update in a loop
     # rospy.loginfo("Marker message")
-    ekf.update(msg)
+    info = msg.markers
+    if len(info) == 0: # POSSIBLY ekf.predict.../ ekf.propagate_state...
+        return
+    for i in range(len(info)):
+        ekf.update(info[i])
     #pass
 
 

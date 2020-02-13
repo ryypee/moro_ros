@@ -20,7 +20,6 @@ class EKF:
         self.v_sigma = [] # for sampling sigma
         self.w_sigma = [] # for sampling sigma
         self.prev_time_stamp = 0 # keeping the last time stamp
-        self.initialized = False #!
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize_state_vector) # Initializing state_vector with ground truth
         #
@@ -58,12 +57,9 @@ class EKF:
         self.calculate_cov()
 
     def update(self, msg):
-        info = msg.markers
-
-        #print(info[0].ids[0])
-        #self.cur_id = info[0].ids[0]
-        #print(self.beacons[self.cur_id])    
-        #self.observation_jacobian_state_vector()
+        #msg.pose.position.[x y z]     msg.pose.orientation.[x y z w]   msg.ids
+        self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
+        self.observation_jacobian_state_vector()
         #floor = self.cov_matrix.dot(self.obs_j_state.transpose())
         #bottom = np.linalg.inv(self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.ones(2))
         #self.K = floor.dot(bottom)
@@ -182,7 +178,8 @@ class EKF:
         #pass
 
     def print_initials(self):
-        print("State vector is", self.state_vector)
+        pass
+        #print("State vector is", self.state_vector)
         #print(self.cov_matrix)
         #print("The initial stated is {}").format(self.state_vector)
         #print("The initial cov. matrix is {}").format(self.cov_matrix)
