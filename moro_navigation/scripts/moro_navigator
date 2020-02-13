@@ -1,0 +1,169 @@
+#!/usr/bin/env python
+import rospy
+import actionlib
+import numpy as np
+import tf
+from tf.transformations import euler_from_quaternion
+from moro_navigation import PathFollower
+from moro_navigation_msgs.srv import PlanPath
+from move_base_msgs.msg import MoveBaseAction, MoveBaseFeedback
+from geometry_msgs.msg import (
+    Point, Quaternion, Twist, PoseStamped, Pose, Vector3)
+from std_msgs.msg import Header
+
+
+class MoroNavigator(object):
+    """MoroNavigator provides an actionlib server to navigate from the current
+    location to the provided goal location.
+
+    Action subscribed topics:
+        ~goal (move_base_msgs/MoveBaseActionGoal): A goal location to
+            navigate to.
+        ~cancel (actionlib_msgs/GoalID): A request to cancel a specific goal.
+
+    Action published topics:
+        ~feedback (move_base_msgs/MoveBaseActionFeedback): Feedback contains
+            the current position of the base in the world.
+        ~status (actionlib_msgs/GoalStatusArray): Provides status information
+            on the action goals.
+        ~result (move_base_msgs/MoveBaseActionResult): Result is empty.
+
+    Published topics:
+        cmd_vel (geometry_msgs/Twist): Mobile base control velocity.
+
+    Parameters:
+        ~control_rate (float): The rate at which to run the control loop.
+            Default: 20.
+        ~goal_threshold (float): Threshold in meters for when the goal is
+                deemed reached. Default: 0.2.
+
+    Services called:
+        plan_path (moro_navigation_msgs/PlanPath): MoroNavigator calls this
+            service to get a path to the goal location.
+
+    Transforms:
+        Needs transform from /map to /base_link.
+    """
+    def __init__(self, name):
+        """Initialize the MoroNavigator
+
+        Args:
+            name (str): The node name.
+        """
+        super(MoroNavigator, self).__init__()
+
+        self._name = name
+        self._rate = rospy.Rate(rospy.get_param('~control_rate', 20))
+        self._goal_threshold = rospy.get_param('~goal_threshold', 0.2)
+        self._tf = tf.TransformListener()
+
+        # Make sure the path planning service is available
+        rospy.loginfo("%s: Waiting for path planning service.", self._name)
+        rospy.wait_for_service('plan_path')
+        self._planner = rospy.ServiceProxy('plan_path', PlanPath)
+
+        # Make sure the transformation from /map to /base_link is available
+        rospy.loginfo("%s: Waiting for transform from '/map' to '/base_link'.",
+                      self._name)
+        while not self._tf.canTransform("/map", "/base_link", rospy.Time()):
+            try:
+                self._tf.waitForTransform("/map", "/base_link", rospy.Time(),
+                                          rospy.Duration(5))
+            except tf.Exception:
+                rospy.logwarn("%s: Transform not available.", self._name)
+
+        # Start the navigation action server
+        rospy.loginfo("%s: Starting navigation server.", self._name)
+        self._pub = rospy.Publisher('cmd_vel', Twist, queue_size=5)
+        self._server = actionlib.SimpleActionServer(self._name, MoveBaseAction,
+                                                    execute_cb=self.execute,
+                                                    auto_start=False)
+        self._server.start()
+
+    def _get_pose(self, t):
+        """Get the pose of /base_link in /map frame.
+
+        Args:
+            t (rospy.Time): The time at which to get transform.
+        """
+        self._tf.waitForTransform("/map", "/base_link",
+                                  t, self._rate.sleep_dur/2)
+        return self._tf.lookupTransform("/map", "/base_link", t)
+
+    def execute(self, goal):
+        """The control loop to execute whenever a new goal is available.
+
+        Args:
+            goal (move_base_msgs/MoveBaseActionGoal): The goal location.
+        """
+        msg = goal.target_pose
+        rospy.loginfo("%s: Navigating to [%s, %s]", self._name,
+                      msg.pose.position.x, msg.pose.position.y)
+
+        # Get current position of mobile base
+        position = self._get_pose(rospy.Time.now())[0]
+
+        # Call the path planning service to get a trajectory to follow
+        try:
+            resp = self._planner(start=Point(x=position[0], y=position[1]),
+                                 goal=msg.pose.position)
+        except rospy.ServiceException:
+            rospy.logerr("%s: Path planning failed.", self._name)
+            self._server.set_aborted()
+            return
+
+        # Extract the relevant data from the trajectory
+        path_length = len(resp.trajectory.points)
+        pos = np.zeros((path_length, 2))
+        vel = np.zeros((path_length, 2))
+        time = np.zeros(path_length)
+
+        for i, point in enumerate(resp.trajectory.points):
+            pos[i] = point.positions
+            vel[i] = point.velocities
+            time[i] = point.time_from_start.to_sec()
+
+        # Initialize a path follower
+        follower = PathFollower(pos, vel, time, self._goal_threshold)
+
+        while not follower.goal_reached:
+            # Check if the current goal has been cancelled
+            if self._server.is_preempt_requested():
+                rospy.loginfo("%s: Preempted", self._name)
+                self._server.set_preempted()
+                # Stop the robot
+                self._pub.publish(Vector3(x=0), Vector3(z=0))
+                return
+
+            # Get current position of the mobile base
+            t = rospy.Time.now()
+            position, quat = self._get_pose(t)
+            yaw = euler_from_quaternion(quat)[2]
+
+            # Get control from path follower
+            linear, angular = follower.get_control(
+                np.append(position[:2], yaw))
+
+            # Publish the control message to the mobile base
+            self._pub.publish(Vector3(x=linear), Vector3(z=angular))
+
+            # Publish feedback message for client
+            self._server.publish_feedback(MoveBaseFeedback(
+                base_position=PoseStamped(
+                    header=Header(stamp=t),
+                    pose=Pose(position=Point(*position),
+                              orientation=Quaternion(*quat))
+                )
+            ))
+
+            # Wait to maintain desired control rate
+            self._rate.sleep()
+
+        rospy.loginfo("%s: Goal reached.", self._name)
+        self._server.set_succeeded()
+
+
+if __name__ == "__main__":
+    rospy.init_node('moro_navigator')
+    planner = MoroNavigator(rospy.get_name())
+    rospy.spin()

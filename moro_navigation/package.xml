@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>moro_navigation</name>
+  <version>0.0.0</version>
+  <description>The moro_navigation package</description>
+
+  <maintainer email="tuomas.valimaki@tuni.fi">Tuomas Välimäki</maintainer>
+
+  <license>MIT</license>
+
+  <depend>rospy</depend>
+  <depend>moro_navigation_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>move_base_msgs</depend>
+  <depend>actionlib</depend>
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>python-numpy</exec_depend>
+  <exec_depend>python-skimage</exec_depend>
+  <exec_depend>python-matplotlib</exec_depend>
+  <exec_depend>quadprog-pip</exec_depend>
+  <test_depend>rosunit</test_depend>
+  <test_depend>python-rospkg</test_depend>
+  <test_depend>python-yaml</test_depend>
+
+</package>

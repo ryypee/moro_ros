@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>moro_simulator</name>
+  <version>0.0.0</version>
+  <description>The moro_simulator package</description>
+
+  <maintainer email="tuomas.valimaki@tuni.fi">Tuomas Välimäki</maintainer>
+
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>map_server</exec_depend>
+  <exec_depend>stage_ros</exec_depend>
+
+</package>

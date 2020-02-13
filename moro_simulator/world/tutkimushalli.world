@@ -1,0 +1,49 @@
+include "include/robot.inc"
+include "include/beacon.inc"
+
+define floorplan model
+(
+  color "gray30"
+  boundary 1
+  ranger_return 1
+  obstacle_return 1
+  gui_move 0
+)
+
+resolution 0.02
+interval_sim 100
+
+window
+(
+  size [ 600 600 ]
+  center [ 13.0 10.8 ]
+  rotate [ 0 0 ]
+  scale 20
+  show_data 1
+)
+
+floorplan
+(
+  name "Tutkimushalli"
+  bitmap "Tutkimushalli_1krs.png"
+  size [ 26.0 21.6 4.0 ]
+  pose [ 13.0 10.8 0 0 ]
+)
+
+beacon
+(
+  fiducial_return 1
+  pose [ 7.3 3.0 0 0 ]
+)
+
+beacon
+(
+  fiducial_return 2
+  pose [ 8.4 5.8 0 0 ]
+)
+
+robot
+(
+  name "robot"
+  pose [ 5.0 5.0 0 0 ]
+)

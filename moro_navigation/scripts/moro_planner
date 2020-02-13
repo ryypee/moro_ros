@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+import rospy
+import numpy as np
+from moro_navigation import ProbabilisticRoadmap, dijkstra, smooth_path
+from moro_navigation.utils import distance
+from moro_navigation_msgs.srv import PlanPath
+from nav_msgs.srv import GetMap
+from nav_msgs.msg import Path
+from geometry_msgs.msg import Point, Pose, PoseStamped
+from std_msgs.msg import Header
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+
+class MoroPlanner(object):
+    """MoroPlanner provides a path planning service.
+
+    Published topics:
+        ~path (nav_msgs/Path): The resulting path of the service call.
+
+    Services:
+        plan_path (moro_navigation_msgs/PlanPath): Plan a path between given
+            start and goal locations.
+
+    Services called:
+        static_map (nav_msgs/GetMap): MoroPlanner calls the service to retrieve
+            the map used for planning.
+
+    """
+    def __init__(self, name):
+        """Initialize the MoroPlanner
+
+        Args:
+            name (str): The node name.
+        """
+        super(MoroPlanner, self).__init__()
+
+        self._name = name
+
+        # Make sure the map is available
+        rospy.loginfo("%s: Waiting for map to be published.", self._name)
+        rospy.wait_for_service('static_map')
+
+        # Retrieve the map an set up a probabilistic roadmap
+        rospy.loginfo("%s: Getting map and setting up PRM.", self._name)
+        get_map = rospy.ServiceProxy('static_map', GetMap)
+        self._prm = ProbabilisticRoadmap(get_map().map)
+
+        # Start the path planning service
+        rospy.loginfo("%s: Starting path planning server.", self._name)
+        self._pub = rospy.Publisher('~path', Path, queue_size=5)
+        self._server = rospy.Service('plan_path', PlanPath, self.callback)
+
+    def _get_closest_node(self, point):
+        """Get the closest node that can connect with the given point.
+
+        Args:
+            point (ndarray): Point coordinates of size (2,).
+
+        Returns:
+            int: The index of the closest node.
+        """
+        (neighbors,) = np.where(
+            [self._prm.can_connect(point, node) for node in self._prm.nodes])
+        closest = np.argmin(distance(point, self._prm.nodes[neighbors]))
+        return neighbors[closest]
+
+    def callback(self, req):
+        """Callback function for the service. Plans the requested path.
+
+        Args:
+            req (moro_navigation_msgs/PlanPathRequest): The requested start and
+                goal locations.
+
+        Returns:
+            moro_navigation_msgs/PlanPathResponse: The resulting trajectory
+                containing position, velocity, acceleration and time.
+        """
+        start = np.array([req.start.x, req.start.y])
+        goal = np.array([req.goal.x, req.goal.y])
+        rospy.loginfo("%s: Planning a path from [%s, %s] to [%s, %s].",
+                      self._name, start[0], start[1], goal[0], goal[1])
+
+        # Try connecting the requested start and goal locations to the graph.
+        # _get_closest_node raises a ValueError if there are no nodes that can
+        # connect with the desired point
+        try:
+            start_node = self._get_closest_node(start)
+        except ValueError:
+            rospy.logwarn("%s: Cannot connect start location to graph.",
+                          self._name)
+            return None
+
+        try:
+            end_node = self._get_closest_node(goal)
+        except ValueError:
+            rospy.logwarn("%s: Cannot connect goal location to graph.",
+                          self._name)
+            return None
+
+        # Plan a feasible path using the graph of the probabilistic roadmap
+        path_id = dijkstra(self._prm.graph, start_node, end_node)
+
+        # If the path length is zero, there was no feasible path
+        if len(path_id) == 0:
+            rospy.logwarn("%s: Goal location not reachable.", self._name)
+            return None
+
+        # Add the requested start and goal locations to the path and perform
+        # path smoothing
+        path = np.vstack((start, self._prm.nodes[path_id], goal))
+        pos, vel, acc, jerk, time = smooth_path(path)
+
+        # Publish a nav_msgs/Path message for visualization purposes
+        now = rospy.Time.now()
+        path_msg = Path(
+            header=Header(stamp=now, frame_id='map'),
+            poses=[PoseStamped(
+                header=Header(stamp=now + rospy.Duration.from_sec(t),
+                              frame_id='map'),
+                pose=Pose(position=Point(x=p[0], y=p[1], z=0))
+            ) for p, t in zip(pos, time)]
+        )
+        self._pub.publish(path_msg)
+
+        # Construct and return the response
+        trajectory_msg = JointTrajectory(
+            header=Header(stamp=now, frame_id='map'),
+            joint_names=['base_link'],
+            points=[JointTrajectoryPoint(
+                positions=p, velocities=v, accelerations=a,
+                time_from_start=rospy.Duration.from_sec(t)
+            ) for p, v, a, t in zip(pos, vel, acc, time)]
+        )
+
+        return trajectory_msg
+
+
+if __name__ == "__main__":
+    rospy.init_node('moro_planner')
+    planner = MoroPlanner(rospy.get_name())
+    rospy.spin()

@@ -1,0 +1,14 @@
+<launch>
+  <include file="$(find moro_simulator)/launch/simulation.launch" />
+
+  <!-- Launch planner node -->
+  <node name="moro_planner" pkg="moro_navigation" type="moro_planner" output="screen" />
+
+  <!-- Launch navigation node -->
+  <node name="moro_navigator" pkg="moro_navigation" type="moro_navigator" output="screen">
+    <param name="control_rate" value="20" />
+    <param name="goal_threshold" value="0.2" />
+    <remap from="cmd_vel" to="cmd_vel" />
+  </node>
+
+</launch>
