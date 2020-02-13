@@ -60,9 +60,14 @@ class EKF:
         #msg.pose.position.[x y z]     msg.pose.orientation.[x y z w]   msg.ids
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
         self.observation_jacobian_state_vector()
-        #floor = self.cov_matrix.dot(self.obs_j_state.transpose())
-        #bottom = np.linalg.inv(self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.ones(2))
-        #self.K = floor.dot(bottom)
+        floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
+        #print(self.obs_j_state.shape, self.cov_matrix.shape,self.obs_j_state.transpose().shape)
+        #bottom = self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()).astype(np.float32)
+        #print(np.linalg.inv(bottom))
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.ones(2)).astype(np.float32)
+        self.K = floor.dot(np.linalg.inv(bottom))
+        print(self.K)
+        #print(self.K)
             #print(self.beacons[cur_id])
             # jacobian is 2x3
             
@@ -89,6 +94,7 @@ class EKF:
             theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]) 
         #print("Theta is",theta, "Unwrapped theta is", np.unwrap(np.angle(theta), discont=np.pi/2))
         self.state_vector = np.array([x,y,theta])
+        #print(self.state_vector)
         self.motion_jacobian_state_vector()
         self.motion_jacobian_noise_components()
         #print(self.state_vector)
@@ -164,16 +170,17 @@ class EKF:
 
     def observation_jacobian_state_vector(self):
         # To DO
-        self.cur_id = self.beacons[self.cur_id]
-        #print(self.cur_id)
         row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2)
         row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2)
         row1term3 = 0
-        row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
-        row2term2 = (self.cur_id[0] - self.state_vector[0]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
+        #row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
+        row2term1 = (self.cur_id[1] - self.state_vector[1])/((self.cur_id[0] - self.state_vector[0])**2* \
+            ((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1)) # matlab version
+        #row2term2 = (self.cur_id[0] - self.state_vector[0]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
+        row2term2 = -1/((self.cur_id[0] - self.state_vector[0])*((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1))
         row2term3 = -1
         self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
-        #print(self.cov_matrix)
+        #print(self.obs_j_state)
         # self.obs_j_state
         #pass
 
@@ -184,5 +191,5 @@ class EKF:
         #print("The initial stated is {}").format(self.state_vector)
         #print("The initial cov. matrix is {}").format(self.cov_matrix)
 
-    def wrap_to_pi(self,angle):
+    def wrap_to_pi(self,angle): #FIXME probably angle should be wrapped in between -pi/2 and pi/2
         return (angle + np.pi) % (2 * np.pi) - np.pi
