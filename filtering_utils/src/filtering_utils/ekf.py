@@ -17,6 +17,7 @@ class EKF:
         self.Q = np.zeros((state_vector_size, state_vector_size))
         self.beacons = {1:[7.3, 3.0], 2:[1,1],3:[9,9],4:[1,8],5:[5.8,8]}
         #
+        self.control = np.array((2,1))
         self.v_sigma = [] # for sampling sigma
         self.w_sigma = [] # for sampling sigma
         self.prev_time_stamp = 0 # keeping the last time stamp
@@ -66,19 +67,11 @@ class EKF:
         #print(np.linalg.inv(bottom))
         bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.ones(2)).astype(np.float32)
         self.K = floor.dot(np.linalg.inv(bottom))
-        print(self.K)
-        #print(self.K)
-            #print(self.beacons[cur_id])
-            # jacobian is 2x3
-            
-            # one more comment
-            #x = info[0].pose.position.x #info[0].ids
-            #y = info[0].pose.position.y
-            #z = info[0].pose.orientation.z
-            #w = info[0].pose.orientation.w
-            #angles = euler_from_quaternion([x,y,z,w])
-            #print(math.degrees(angles[0]), math.degrees(angles[1]),math.degrees(angles[2]))
-        #pass
+        print(self.control)
+        #tempterm = self.control - self.measurement_model()
+        #test = self.state_vector + self.K.dot(tempterm)
+        #print(test)
+        
 
     def propagate_state(self):
         #print(self.state_vector[1])
@@ -103,16 +96,19 @@ class EKF:
 
     def measurement_model(self):
         #FIXME get properly done
+
         x = self.state_vector[0]
         y = self.state_vector[1]
         theta = self.state_vector[2]
+        print(x,y,theta)
         px = self.cur_id[0]
         py = self.cur_id[1]
 
         r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
         phi = np.arctan2(py-y, px-x) - theta    #Bearing
 
-        Mx = np.array([[r],[phi]])              
+        self.Z = np.array([r,phi])
+        #self.Z = np.array([r,phi])              
 
 
 

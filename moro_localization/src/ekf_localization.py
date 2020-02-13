@@ -20,6 +20,8 @@ def marker_callback(msg):
     # rospy.loginfo("Marker message")
     info = msg.markers
     if len(info) == 0: # POSSIBLY ekf.predict.../ ekf.propagate_state...
+        print("No transmitters found!")
+        ekf.propagate_state()
         return
     for i in range(len(info)):
         ekf.update(info[i])
