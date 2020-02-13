@@ -31,7 +31,7 @@ class EKF:
         theta = euler_from_quaternion([msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z,msg.pose.pose.orientation.w])[2]
         self.state_vector[0] = x
         self.state_vector[1] = y
-        self.state_vector[2] = theta
+        self.state_vector[2] = self.wrap_to_pi(theta)
         self.gt.unregister() # unregister subscriber. Function is implemented only once.
 
 
@@ -58,9 +58,7 @@ class EKF:
         self.calculate_cov()
 
     def update(self, msg):
-        pass
-        # Suppose we see only one beacon
-        #info = msg.markers
+        info = msg.markers
 
         #print(info[0].ids[0])
         #self.cur_id = info[0].ids[0]
@@ -87,12 +85,12 @@ class EKF:
             term = self.control[0]
             x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my
             y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my
-            theta = self.state_vector[2] # TODO python wrapping: theta must be between -pi/2; pi/2
+            theta = self.wrap_to_pi(self.state_vector[2]) 
         else:
             term = self.control[0]/self.control[1]
             x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]) # my
             y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]) # my
-            theta = self.state_vector[2] + self.control[1] # TODO python wrapping: theta must be between -pi/2; pi/2
+            theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]) 
         #print("Theta is",theta, "Unwrapped theta is", np.unwrap(np.angle(theta), discont=np.pi/2))
         self.state_vector = np.array([x,y,theta])
         self.motion_jacobian_state_vector()
@@ -122,7 +120,7 @@ class EKF:
         #self.cov_matrix = self.motion_j_state * self.cov_matrix * \
         #    self.motion_j_state.transpose() + self.Q #original
         self.cov_matrix = self.motion_j_state.dot(self.cov_matrix).dot(self.motion_j_state.transpose()) + self.Q
-        print(self.cov_matrix)
+        #print(self.cov_matrix)
 
     def motion_jacobian_state_vector(self): # trailing zeros!
         #FIXME correct derivatives and add dt to the equations
@@ -184,7 +182,10 @@ class EKF:
         #pass
 
     def print_initials(self):
-        print("Printing some values")
+        print("State vector is", self.state_vector)
         #print(self.cov_matrix)
         #print("The initial stated is {}").format(self.state_vector)
         #print("The initial cov. matrix is {}").format(self.cov_matrix)
+
+    def wrap_to_pi(self,angle):
+        return (angle + np.pi) % (2 * np.pi) - np.pi
