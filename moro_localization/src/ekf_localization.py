@@ -21,9 +21,8 @@ def marker_callback(msg):
     info = msg.markers
     if len(info) == 0: # POSSIBLY ekf.predict.../ ekf.propagate_state...
         #print("No transmitters found! State vector is", ekf.state_vector)
-        ekf.propagate_state()
         return
-    print(len(info))
+    #print(len(info))
     for i in range(len(info)):
         #print("iteration", i)
         #print(ekf.state_vector.shape)

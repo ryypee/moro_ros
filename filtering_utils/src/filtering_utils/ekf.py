@@ -2,6 +2,7 @@
 import numpy as np
 import math
 from tf.transformations import euler_from_quaternion
+#from tf.transformations import quaternion_from_euler
 from nav_msgs.msg import Odometry
 import rospy
 import pdb
@@ -23,6 +24,7 @@ class EKF:
         self.v_sigma = [] # for sampling sigma
         self.w_sigma = [] # for sampling sigma
         self.prev_time_stamp = 0 # keeping the last time stamp
+        self.prev_state = np.array((3,1))
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize_state_vector) # Initializing state_vector with ground truth
         #
@@ -34,6 +36,7 @@ class EKF:
         self.state_vector[0] = x
         self.state_vector[1] = y
         self.state_vector[2] = self.wrap_to_pi(theta)
+        self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
         self.gt.unregister() # unregister subscriber. Function is implemented only once.
 
 
@@ -44,7 +47,8 @@ class EKF:
         # Get v,w from odometry msg
         w = odometry.twist.twist.angular.z
         v = odometry.twist.twist.linear.x
-        self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp
+        self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp #FIXME prev_time_step #Corrected
+        print("Initial timestep:",self.dt)
         #
         # get timestamp
         self.prev_time_stamp = odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9)
@@ -54,16 +58,16 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.004, 0],[0,0.001])) # FOR TEST PURPOSES
+        self.q = np.array(([0.04, 0],[0,0.001])) # FOR TEST PURPOSES
         #
         # Call functions
-        if self.state_vector.shape[1] > 1:
+        #if self.state_vector.shape[1] > 1:
             #print("Problem found!!!", self.state_vector.shape)
-            pass
+            #pass
         self.propagate_state()
         self.calculate_cov()
 
-    def update(self, msg): # BUG the second/third iteration shows some vector other than state vector and disturbs results
+    def update(self, msg): #
         #pdb.set_trace()
         #print('update state', self.state_vector.shape)
         #msg.pose.position.[x y z]     msg.pose.orientation.[x y z w]   msg.ids
@@ -76,12 +80,16 @@ class EKF:
         #print(self.obs_j_state.shape, self.cov_matrix.shape,self.obs_j_state.transpose().shape)
         #bottom = self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()).astype(np.float32)
         #print(np.linalg.inv(bottom))
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.ones(2)).astype(np.float32)
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)).astype(np.float32)
         self.K = floor.dot(np.linalg.inv(bottom))
         expected_meas = self.measurement_model()
+        #FIXME correct it
+        #FIXME
         tempterm = np.array(([self.control[0] - expected_meas[0], [self.control[1] - expected_meas[1]]])) # FIXME debugging purpose
-        if tempterm.shape[1] > 1:
-            pdb.set_trace()
+        #FIXME
+        #FIXME correct it
+        # if tempterm.shape[1] > 1:
+        #     pdb.set_trace()
         #print(self.measurement_model().shape, self.control.shape, tempterm.shape)
         #print("State vector before",self.state_vector)
         #print(self.state_vector.shape, self.K.shape, tempterm.shape)
@@ -92,7 +100,13 @@ class EKF:
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         #self.state_vector = self.state_vector + self.K.dot()
         #print("Transmitters are present! State vector is", self.state_vector)
+        self.prev_state = self.state_vector
         print(self.state_vector)
+    
+    def meas_model(self,state,beacon=[]):
+        pass
+
+
         
 
     def propagate_state(self):
@@ -100,42 +114,42 @@ class EKF:
         #print(self.state_vector.shape)
         if self.control[1] == 0:
             term = self.control[0]
-            x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my
-            y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my
+            x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my #FIXME dt
+            y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my #FIXME dt
             theta = self.wrap_to_pi(self.state_vector[2]) 
         else:
             term = self.control[0]/self.control[1]
-            x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]) # my
-            y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]) # my
+            x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]) # my #FIXME dt
+            y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]) # my #FIXME dt
             theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]) 
         #print("Theta is",theta, "Unwrapped theta is", np.unwrap(np.angle(theta), discont=np.pi/2))
         self.state_vector = np.array([x,y,theta])
         #print(self.state_vector)
-        if self.state_vector.shape[1] > 1:
-            pass
+        # if self.state_vector.shape[1] > 1:
+        #     pass
             #print("Found PROBLEM", self.state_vector.shape)
             #pdb.set_trace()
-        self.motion_jacobian_state_vector()
-        self.motion_jacobian_noise_components()
+        self.motion_jacobian_state_vector() # FIXME place to cov_matrix
+        self.motion_jacobian_noise_components() #FIXME palce to cov_matrix
         #print(self.state_vector)
         #pass
 
 
-    def measurement_model(self):
-        #print("State vector entered shape", self.state_vector.shape)
-        x = self.state_vector[0]
-        y = self.state_vector[1]
-        theta = self.state_vector[2]
-        #print(x,y,theta)
-        px = self.cur_id[0]
-        py = self.cur_id[1]
+    # def measurement_model(self):
+    #     #print("State vector entered shape", self.state_vector.shape)
+    #     x = self.state_vector[0]
+    #     y = self.state_vector[1]
+    #     theta = self.state_vector[2]
+    #     #print(x,y,theta)
+    #     px = self.cur_id[0]
+    #     py = self.cur_id[1]
 
-        r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
-        phi = np.arctan2(py-y, px-x) - theta    #Bearing
+    #     r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
+    #     phi = np.arctan2(py-y, px-x) - theta    #Bearing
 
         #self.Z = np.array(([r,phi]))
         self.Z[0] = r
-        self.Z[1] = phi
+        self.Z[1] = phi #FIXME wrap_to_pi
         #print("State vector before leaving shape", self.state_vector.shape)
         return self.Z
         #self.Z = np.array([r,phi])              
@@ -225,3 +239,10 @@ class EKF:
 
     def wrap_to_pi(self,angle): 
         return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def wrap_to_pi_again(self, prev, now):
+        y = prev - now
+        y[1] = y[1] % (2 * np.pi)    # force in range [0, 2 pi)
+        if y[1] > np.pi:             # move to [-pi, pi)
+            y[1] -= 2 * np.pi
+        return y
