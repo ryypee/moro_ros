@@ -146,8 +146,8 @@ class EKF:
             row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
             row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
         else:
-            row1term3 = -self.control[0]*np.sin(self.state_vector[2]+self.dt)
-            row2term3 = -self.control[0]*np.cos(self.state_vector[2]+self.dt)
+            row1term3 = -self.control[0]*np.sin(self.state_vector[2] + self.dt) # !!! EXPERIMENT +dt is drawn outside of sin/cos #FIXME experiment
+            row2term3 = -self.control[0]*np.cos(self.state_vector[2] + self.dt) # !!! EXPERIMENT +dt is drawn outside of sin/cos #FIXME experiment
         #print(row1term3, row2term2)
         if len(row1term3) > 1:
             #pdb.set_trace()
@@ -162,25 +162,29 @@ class EKF:
         # TO DO
         #print(self.state_vector[1])
         if self.control[1] != 0: # if angular velocity is not zero
-            row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # check
+            row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
             
-            row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
+            #row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
+            row1term2 = (np.cos(self.control[1]*self.dt + self.state_vector[2])*self.control[0]*self.dt)/self.control[1] \
+                - ((np.sin(self.control[1]*self.dt + self.state_vector[2])*self.control[0])/self.control[1]**2) # checked
 
-            row2term1 = -np.cos(self.state_vector[2] + self.control[1]*self.dt) # check
+            row2term1 = -np.cos(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
 
             tempterm = self.state_vector[2] + self.control[1]*self.dt
 
-            row2term2 = -self.control[0]*(-np.cos(tempterm) - self.control[1]*self.dt*np.sin(tempterm)) # check
+            row2term2 = ((np.cos(tempterm)*self.control[0])/self.control[1]**2) \
+                + ((self.dt*np.sin(tempterm)*self.control[0])/self.control[1])
+            #row2term2 = -self.control[0]*(-np.cos(tempterm) - self.control[1]*self.dt*np.sin(tempterm)) # check
 
             row3term1 = 0
             row3term2 = self.dt
         else:
-            row1term1 = np.cos(self.state_vector[2] + self.dt)
+            row1term1 = np.cos(self.state_vector[2]) # EXPERIMENT +dt taken out of equation
             row1term2 = 0
-            row2term1 = -np.sin(self.state_vector[2] + self.dt)
+            row2term1 = -np.sin(self.state_vector[2]) # EXPERIMENT +dt taken out of equation
             row2term2 = 0
             row3term1 = 0
-            row3term2 = self.state_vector[2] # dt = 1, possibly wrong
+            row3term2 = 0 #self.state_vector[2] # dt = 1, possibly wrong
         self.motion_j_noise = np.array(([row1term1, row1term2],[row2term1,row2term2],[row3term1,row3term2]))
         #print(row1term1, row1term2, row2term1, row2term2, row3term1, row3term2)
 
@@ -190,14 +194,15 @@ class EKF:
     def observation_jacobian_state_vector(self):
         #print('Observation jacobian', self.state_vector.shape)
         # To DO
-        row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2)
-        row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2)
+        row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
+        row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
         row1term3 = 0
-        #row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
-        row2term1 = (self.cur_id[1] - self.state_vector[1])/((self.cur_id[0] - self.state_vector[0])**2* \
-            ((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1)) # matlab version
+        row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
+        #row2term1 = (self.cur_id[1] - self.state_vector[1])/((self.cur_id[0] - self.state_vector[0])**2* \
+         #   ((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1)) # matlab version
         #row2term2 = (self.cur_id[0] - self.state_vector[0]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
-        row2term2 = -1/((self.cur_id[0] - self.state_vector[0])*((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1))
+        #row2term2 = -1/((self.cur_id[0] - self.state_vector[0])*((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1))
+        row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
         self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
         #print(self.obs_j_state)
