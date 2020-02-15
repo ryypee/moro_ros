@@ -83,15 +83,12 @@ class EKF:
         
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.001).astype(np.float32)
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.01).astype(np.float32)
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
         expected_meas = self.measurement_model(self.state_vector)
         new_meas = self.measurement_model([pos_x, pos_y, theta])
-        #FIXME correct it
-        #FIXME
+        
         tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
-        #FIXME
-        #FIXME correct it
        
         self.state_vector = self.state_vector + self.K.dot(tempterm) 
         try:
@@ -106,19 +103,17 @@ class EKF:
 
 
     def propagate_state(self):
-        if self.control[1] == 0:
-            term = self.control[0]
-            x = self.state_vector[0] + self.control[0]*self.dt
-            y = self.state_vector[1] + self.control[1]*self.dt
-            theta = self.state_vector[2]
-            #x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my #FIXME dt 
-            #y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my #FIXME dt 
-            #theta = self.wrap_to_pi(self.state_vector[2]) 
-        else:
+        if self.control[1] > 0.001: # was "if self.control[1] == 0"
             term = self.control[0]/self.control[1]
             x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
             y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
             theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
+        else:
+            term = self.control[0]
+            x = self.state_vector[0] + self.control[0]*self.dt
+            y = self.state_vector[1] + self.control[1]*self.dt
+            theta = self.state_vector[2]
+            
         self.state_vector = np.array([x,y,theta])
         
 
@@ -131,8 +126,8 @@ class EKF:
         py = self.cur_id[1]
 
         r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
-        phi = np.arctan2(py-y, px-x) - theta    #Bearing
-        #phi = np.arctan((py - y)/(px - x)) - theta #FIXME test
+        #phi = np.arctan2(py-y, px-x) - theta    #Bearing
+        phi = np.arctan((py - y)/(px - x)) - theta #FIXME test
 
         self.Z[0] = r
         self.Z[1] = phi #self.wrap_to_pi(phi)
@@ -149,28 +144,17 @@ class EKF:
         self.motion_jacobian_noise_components()
 
     def motion_jacobian_state_vector(self):
-        #print('Motion jacobian', self.state_vector.shape)
-        if self.control[1] != 0:
+        if self.control[1] > 0.001:
             term = self.control[0]/self.control[1]
-            row1term3 = 0 #term*np.cos(self.state_vector[2] + self.control[1]*self.dt) simple model experiment
-            row2term3 = 0 #term*np.sin(self.state_vector[2] + self.control[1]*self.dt) simple model experiment
+            row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
+            row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
         else:
-            row1term3 = -self.control[0]*np.sin(self.state_vector[2] + self.dt)
-            row2term3 = -self.control[0]*np.cos(self.state_vector[2] + self.dt)
-        #print(row1term3, row2term2)
-        # if len(row1term3) > 1:
-        #     #pdb.set_trace()
-        #     pass
+            row1term3 = 0#-self.control[0]*np.sin(self.state_vector[2] + self.dt)
+            row2term3 = 0#-self.control[0]*np.cos(self.state_vector[2] + self.dt)
         self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
-        #print(self.motion_j_state) # 
-        # self.motion_j_state
-        pass
 
     def motion_jacobian_noise_components(self): # trailing zeros!
-        #print('Motion noise jacobian', self.state_vector.shape)
-        # TO DO
-        #print(self.state_vector[1])
-        if self.control[1] != 0: # if angular velocity is not zero
+        if self.control[1] > 0.001: # if angular velocity is not zero
             row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
             
             #row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
@@ -188,12 +172,12 @@ class EKF:
             row3term1 = 0
             row3term2 = self.dt
         else:
-            row1term1 = self.dt #np.cos(self.state_vector[2]) # EXPERIMENT +dt taken out of equation
+            row1term1 = self.dt
             row1term2 = 0
-            row2term1 = self.dt #-np.sin(self.state_vector[2]) # EXPERIMENT +dt taken out of equation
+            row2term1 = self.dt
             row2term2 = 0
             row3term1 = 0
-            row3term2 = 0 #self.state_vector[2] # dt = 1, possibly wrong
+            row3term2 = 0
         self.motion_j_noise = np.array(([row1term1, row1term2],[row2term1,row2term2],[row3term1,row3term2]))
         #print(row1term1, row1term2, row2term1, row2term2, row3term1, row3term2)
 
@@ -201,22 +185,13 @@ class EKF:
         #pass
 
     def observation_jacobian_state_vector(self):
-        #print('Observation jacobian', self.state_vector.shape)
-        # To DO
         row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
         row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
         row1term3 = 0
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
-        #row2term1 = (self.cur_id[1] - self.state_vector[1])/((self.cur_id[0] - self.state_vector[0])**2* \
-         #   ((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1)) # matlab version
-        #row2term2 = (self.cur_id[0] - self.state_vector[0]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2)
-        #row2term2 = -1/((self.cur_id[0] - self.state_vector[0])*((self.cur_id[1] - self.state_vector[1])**2/(self.cur_id[0] - self.state_vector[0])**2 + 1))
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
         self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
-        #print(self.obs_j_state)
-        # self.obs_j_state
-        #pass
 
     def print_initials(self):
         pass
@@ -226,41 +201,4 @@ class EKF:
         #print("The initial cov. matrix is {}").format(self.cov_matrix)
 
     def wrap_to_pi(self,angle):
-        #return np.arctan2(np.sin(angle), np.cos(angle))
         return (angle + np.pi) % (2 * np.pi) - np.pi
-
-##======================
-# def wrap_to_pi(self, num, lower=-0.5*np.pi, upper=0.5*np.pi, b=True):
-#     from math import floor, ceil
-#     # abs(num + upper) and abs(num - lower) are needed, instead of
-#     # abs(num), since the lower and upper limits need not be 0. We need
-#     # to add half size of the range, so that the final result is lower +
-#     # <value> or upper - <value>, respectively.
-#     res = num
-#     if not b:
-#         if lower >= upper:
-#             raise ValueError("Invalid lower and upper limits: (%s, %s)" %
-#                              (lower, upper))
-
-#         res = num
-#         if num > upper or num == lower:
-#             num = lower + abs(num + upper) % (abs(lower) + abs(upper))
-#         if num < lower or num == upper:
-#             num = upper - abs(num - lower) % (abs(lower) + abs(upper))
-
-#         res = lower if res == upper else num
-#     else:
-#         total_length = abs(lower) + abs(upper)
-#         if num < -total_length:
-#             num += ceil(num / (-2 * total_length)) * 2 * total_length
-#         if num > total_length:
-#             num -= floor(num / (2 * total_length)) * 2 * total_length
-#         if num > upper:
-#             num = total_length - num
-#         if num < lower:
-#             num = -total_length - num
-
-#         res = num * 1.0  # Make all numbers float, to be consistent
-
-#     return res
-##======================
