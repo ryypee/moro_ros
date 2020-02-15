@@ -28,6 +28,9 @@ class EKF:
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize_state_vector) # Initializing state_vector with ground truth
         #
+        self.state_data_history = []
+        self.ground_truth_state_history = []
+
     def initialize_state_vector(self, msg): # Function for initializing state_vector
         #print("initialize state", self.state_vector.shape)
         x = msg.pose.pose.position.x
@@ -47,8 +50,9 @@ class EKF:
         # Get v,w from odometry msg
         w = odometry.twist.twist.angular.z
         v = odometry.twist.twist.linear.x
-        self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp #FIXME prev_time_step #Corrected
-        #print("Initial timestep:",self.dt)
+        self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp
+        #print(self.dt)
+        #pdb.set_trace()
         #
         # get timestamp
         self.prev_time_stamp = odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9)
@@ -60,10 +64,6 @@ class EKF:
         # determine q-matrix aka process noise
         self.q = np.array(([0.04, 0],[0,0.001])) # FOR TEST PURPOSES
         #
-        # Call functions
-        #if self.state_vector.shape[1] > 1:
-            #print("Problem found!!!", self.state_vector.shape)
-            #pass
         self.propagate_state()
         self.calculate_cov()
 
@@ -76,7 +76,7 @@ class EKF:
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
-        print("Position is",[pos_x, pos_y], "Heading is:", theta)
+        #print("Position is",[pos_x, pos_y], "Heading is:", theta)
         self.observation_jacobian_state_vector()
         
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
@@ -87,7 +87,7 @@ class EKF:
         new_meas = self.measurement_model([pos_x, pos_y, theta])
         #FIXME correct it
         #FIXME
-        tempterm = np.array(([self.control[0] - expected_meas[0], [self.control[1] - expected_meas[1]]])) # FIXME debugging purpose
+        tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]])) # FIXME debugging purpose
         #FIXME
         #FIXME correct it
        
@@ -97,22 +97,22 @@ class EKF:
         
         self.prev_state = self.state_vector
         print(self.state_vector)
+        #print(self.cov_matrix)
 
 
     def propagate_state(self):
         if self.control[1] == 0:
             term = self.control[0]
-            x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my #FIXME dt
-            y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my #FIXME dt
+            x = self.state_vector[0] + (term)*np.cos(self.state_vector[2]) # my #FIXME dt 
+            y = self.state_vector[1] - (term)*np.sin(self.state_vector[2]) # my #FIXME dt 
             theta = self.wrap_to_pi(self.state_vector[2]) 
         else:
             term = self.control[0]/self.control[1]
-            x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]) # my #FIXME dt
-            y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]) # my #FIXME dt
-            theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]) 
+            x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
+            theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
         self.state_vector = np.array([x,y,theta])
-        self.motion_jacobian_state_vector() # FIXME place to cov_matrix
-        self.motion_jacobian_noise_components() #FIXME palce to cov_matrix
+        
 
 
     def measurement_model(self,state):
@@ -126,35 +126,33 @@ class EKF:
         phi = np.arctan2(py-y, px-x) - theta    #Bearing
 
         self.Z[0] = r
-        self.Z[1] = self.wrap_to_pi(phi) #FIXME wrap_to_pi
+        self.Z[1] = self.wrap_to_pi(phi)
         return self.Z
         #self.Z = np.array([r,phi])              
 
 
 
-    def calculate_cov(self): # Original multiplications was changed to "np.dot"-notation
-        #print('calculate P', self.state_vector.shape)
-        #self.Q = self.motion_j_noise * self.q * motion_j_noise.transpose() # original
+    def calculate_cov(self):
         self.Q = self.motion_j_noise.dot(self.q).dot(self.motion_j_noise.transpose())
-        #self.cov_matrix = self.motion_j_state * self.cov_matrix * \
-        #    self.motion_j_state.transpose() + self.Q #original
         self.cov_matrix = self.motion_j_state.dot(self.cov_matrix).dot(self.motion_j_state.transpose()) + self.Q
-        #print(self.cov_matrix)
+
+        self.motion_jacobian_state_vector()
+        self.motion_jacobian_noise_components()
 
     def motion_jacobian_state_vector(self):
         #print('Motion jacobian', self.state_vector.shape)
         if self.control[1] != 0:
             term = self.control[0]/self.control[1]
             row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            row2term2 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
         else:
-            row1term3 = -self.control[0]*np.sin(self.state_vector[2] + self.dt)
-            row2term2 = -self.control[0]*np.cos(self.state_vector[2] + self.dt)
+            row1term3 = -self.control[0]*np.sin(self.state_vector[2]+self.dt)
+            row2term3 = -self.control[0]*np.cos(self.state_vector[2]+self.dt)
         #print(row1term3, row2term2)
         if len(row1term3) > 1:
             #pdb.set_trace()
             pass
-        self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term2],[0,0,1]))
+        self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
         #print(self.motion_j_state) # 
         # self.motion_j_state
         pass
@@ -182,7 +180,7 @@ class EKF:
             row2term1 = -np.sin(self.state_vector[2] + self.dt)
             row2term2 = 0
             row3term1 = 0
-            row3term2 = self.state_vector[2] + 1 # dt = 1, possibly wrong
+            row3term2 = self.state_vector[2] # dt = 1, possibly wrong
         self.motion_j_noise = np.array(([row1term1, row1term2],[row2term1,row2term2],[row3term1,row3term2]))
         #print(row1term1, row1term2, row2term1, row2term2, row3term1, row3term2)
 
@@ -213,12 +211,6 @@ class EKF:
         #print("The initial stated is {}").format(self.state_vector)
         #print("The initial cov. matrix is {}").format(self.cov_matrix)
 
-    def wrap_to_pi(self,angle): 
+    def wrap_to_pi(self,angle):
+        #return np.arctan2(np.sin(angle), np.cos(angle))
         return (angle + np.pi) % (2 * np.pi) - np.pi
-
-    # def wrap_to_pi_again(self, prev, now):
-    #     y = prev - now
-    #     y[1] = y[1] % (2 * np.pi)    # force in range [0, 2 pi)
-    #     if y[1] > np.pi:             # move to [-pi, pi)
-    #         y[1] -= 2 * np.pi
-    #     return y
