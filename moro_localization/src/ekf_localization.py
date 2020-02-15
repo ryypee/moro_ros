@@ -16,6 +16,7 @@ def odom_callback(msg):
 
 
 def marker_callback(msg):
+    print(ekf.state_vector)
     # TODO check length of msg came and perform update in a loop
     # rospy.loginfo("Marker message")
     info = msg.markers
@@ -26,7 +27,8 @@ def marker_callback(msg):
     for i in range(len(info)):
         #print("iteration", i)
         #print(ekf.state_vector.shape)
-        ekf.update(info[i])
+        #ekf.update(info[i])
+        pass
     #pass
 
 

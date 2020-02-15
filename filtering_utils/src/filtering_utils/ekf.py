@@ -103,15 +103,19 @@ class EKF:
 
 
     def propagate_state(self):
-        if self.control[1] > 0.001: # was "if self.control[1] == 0"
+        if self.control[1] != 0:
             term = self.control[0]/self.control[1]
-            x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
-            y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            theta = self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
+            x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
+            y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
+            #x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            #y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
+            theta = self.state_vector[2] + self.control[1]*self.dt #self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
+            theta = self.wrap_to_pi(theta)
+
         else:
             term = self.control[0]
             x = self.state_vector[0] + self.control[0]*self.dt
-            y = self.state_vector[1] + self.control[1]*self.dt
+            y = self.state_vector[1] + self.control[0]*self.dt
             theta = self.state_vector[2]
             
         self.state_vector = np.array([x,y,theta])
@@ -144,17 +148,17 @@ class EKF:
         self.motion_jacobian_noise_components()
 
     def motion_jacobian_state_vector(self):
-        if self.control[1] > 0.001:
+        if self.control[1] != 0:
             term = self.control[0]/self.control[1]
             row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
             row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
         else:
-            row1term3 = 0#-self.control[0]*np.sin(self.state_vector[2] + self.dt)
-            row2term3 = 0#-self.control[0]*np.cos(self.state_vector[2] + self.dt)
+            row1term3 = 0 #-self.control[0]*np.sin(self.state_vector[2] + self.dt)
+            row2term3 = 0 #-self.control[0]*np.cos(self.state_vector[2] + self.dt)
         self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
 
     def motion_jacobian_noise_components(self): # trailing zeros!
-        if self.control[1] > 0.001: # if angular velocity is not zero
+        if self.control[1] != 0: # if angular velocity is not zero
             row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
             
             #row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
