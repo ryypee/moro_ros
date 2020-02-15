@@ -7,7 +7,7 @@ from nav_msgs.msg import Odometry
 import rospy
 import pdb
 import warnings
-warnings.filterwarnings('error') # 32 sec error
+#warnings.filterwarnings('error')
 import sympy
 
 class EKF:
@@ -37,13 +37,16 @@ class EKF:
     
     def initialize_symbolic_models(self):
         x,y,theta, v, w, dv, dw, dt, mix, miy, dr, df = sympy.symbols('x,y,theta, v, w, dv, dw, dt, mix, miy, dr, df')
-        self.motion_model = sympy.Matrix([[x + ((v+dv)/(w+dw))*sympy.sin(theta + (w + dw)*dt)], \
-            [y - ((v+dv)/(w+dw))*sympy.cos(theta + (w + dw)*dt)], \
-            [theta + (w + dw)*dt]])
+        # self.motion_model = sympy.Matrix([[x + ((v+dv)/(w+dw))*sympy.sin(theta + (w + dw)*dt)], \
+        #     [y - ((v+dv)/(w+dw))*sympy.cos(theta + (w + dw)*dt)], \
+        #     [theta + (w + dw)*dt]])
+        self.motion_model = sympy.Matrix([[x - (v/w)*sympy.sin(theta) + (v/w)*sympy.sin(theta + w*dt)], \
+            [y + (v/w)*sympy.cos(theta) - (v/w)*sympy.cos(theta + w*dt)], \
+            [theta + w*dt]])
         self.motion_state = sympy.Matrix([x,y,theta])
         self.simple_motion_model = sympy.Matrix([[x + v*dt], \
             [y + v*dt], \
-            [theta]])
+            [theta]]) # the second function was 'y + v*dt'
         self.measurement_model = sympy.Matrix([[sympy.sqrt((x - mix)**2 + (y - miy)**2) + dr] , \
             [sympy.atan((miy - y)/(mix - x)) - theta + df]])
         self.meas_noise_components = sympy.Matrix([dr, df])
@@ -51,6 +54,7 @@ class EKF:
         self.F_jacobian = self.motion_model.jacobian(self.motion_state)
         self.F_simple_jacobian = self.simple_motion_model.jacobian(self.motion_state)
         self.G_jacobian = self.motion_model.jacobian(self.motion_noise_components)
+        self.G_simple_jacobian = self.simple_motion_model.jacobian(self.motion_noise_components)
         self.H_jacobian = self.measurement_model.jacobian(self.motion_state)
 
     def substitute_values(self,model, state, control, params):
@@ -75,6 +79,7 @@ class EKF:
         self.state_vector[2] = self.wrap_to_pi(theta)
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
         self.gt.unregister() # unregister subscriber. Function is implemented only once.
+        print("Initialized vector with goround truth")
 
 
     def predict(self, odometry): # odometry added by me
@@ -102,15 +107,10 @@ class EKF:
         self.calculate_cov()
 
     def update(self, msg): #
-        #pdb.set_trace()
-        #print('update state', self.state_vector.shape)
-        #msg.pose.position.[x y z]     msg.pose.orientation.[x y z w]   msg.ids
-        #print(msg.ids[0])
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
-        #print("Position is",[pos_x, pos_y], "Heading is:", theta)
         self.observation_jacobian_state_vector()
         
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
@@ -137,20 +137,8 @@ class EKF:
     def propagate_state(self):
         if self.control[1] != 0:
             test = self.substitute_values(self.motion_model, self.state_vector,self.control,[self.dt,0,0,0,0]).astype(np.float32)
-            # term = self.control[0]/self.control[1]
-            # x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
-            # y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
-            # #x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
-            # #y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            # theta = self.state_vector[2] + self.control[1]*self.dt #self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
-            # theta = self.wrap_to_pi(theta)
-
         else:
             test = self.substitute_values(self.simple_motion_model,self.state_vector,self.control,[self.dt,0,0,0,0]).astype(np.float32)
-            # term = self.control[0]
-            # x = self.state_vector[0] + self.control[0]*self.dt
-            # y = self.state_vector[1] + self.control[0]*self.dt
-            # theta = self.state_vector[2]
             
         self.state_vector[0] = test[0]
         self.state_vector[1] = test[1]
@@ -159,22 +147,9 @@ class EKF:
 
 
     def measurement_model(self,state):
-        x = state[0]
-        y = state[1]
-        theta = state[2]
-        px = self.cur_id[0]
-        py = self.cur_id[1]
-
-        r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
-        #phi = np.arctan2(py-y, px-x) - theta    #Bearing
-        phi = np.arctan((py - y)/(px - x)) - theta #FIXME test
-
-        self.Z[0] = r
-        self.Z[1] = phi #self.wrap_to_pi(phi)
-        return self.Z
-        #self.Z = np.array([r,phi])              
-
-
+        result = self.substitute_values(self.measurement_model, state, self.control, [self.dt,0,0,0,0])
+        result[1] = self.wrap_to_pi(result[1])
+        return np.array(result)
 
     def calculate_cov(self):
         self.Q = self.motion_j_noise.dot(self.q).dot(self.motion_j_noise.transpose())
@@ -190,52 +165,19 @@ class EKF:
             result = self.substitute_values(self.F_simple_jacobian, self.state_vector, self.control,[self.dt,0,0,0,0])
         self.motion_j_state = result
 
-    def motion_jacobian_noise_components(self): # trailing zeros!
+    def motion_jacobian_noise_components(self):
         if self.control[1] != 0: # if angular velocity is not zero
-            row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
-            
-            #row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
-            row1term2 = (np.cos(self.control[1]*self.dt + self.state_vector[2])*self.control[0]*self.dt)/self.control[1] \
-                - ((np.sin(self.control[1]*self.dt + self.state_vector[2])*self.control[0])/self.control[1]**2) # checked
-
-            row2term1 = -np.cos(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
-
-            tempterm = self.state_vector[2] + self.control[1]*self.dt
-
-            row2term2 = ((np.cos(tempterm)*self.control[0])/self.control[1]**2) \
-                + ((self.dt*np.sin(tempterm)*self.control[0])/self.control[1])
-            #row2term2 = -self.control[0]*(-np.cos(tempterm) - self.control[1]*self.dt*np.sin(tempterm)) # check
-
-            row3term1 = 0
-            row3term2 = self.dt
+            result = self.substitute_values(self.G_jacobian, self.state_vector, self.control, [self.dt,0,0,0,0])
         else:
-            row1term1 = self.dt
-            row1term2 = 0
-            row2term1 = self.dt
-            row2term2 = 0
-            row3term1 = 0
-            row3term2 = 0
-        self.motion_j_noise = np.array(([row1term1, row1term2],[row2term1,row2term2],[row3term1,row3term2]))
-        #print(row1term1, row1term2, row2term1, row2term2, row3term1, row3term2)
-
-        # self.motion_j_noise
-        #pass
+            result = self.substitute_values(self.G_simple_jacobian, self.state_vector, self.control, [self.dt,0,0,0,0])
+        self.motion_j_noise = result
 
     def observation_jacobian_state_vector(self):
-        row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term3 = 0
-        row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
-        row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
-        row2term3 = -1
-        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
+        result = self.substitute_values(self.H_jacobian, self.state_vector, self.control, [self.dt,0,0,0,0])
+        self.obs_j_state = result
 
     def print_initials(self):
         pass
-        #print("State vector is", self.state_vector)
-        #print(self.cov_matrix)
-        #print("The initial stated is {}").format(self.state_vector)
-        #print("The initial cov. matrix is {}").format(self.cov_matrix)
 
     def wrap_to_pi(self,angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi
