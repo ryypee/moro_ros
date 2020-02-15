@@ -8,6 +8,7 @@ import rospy
 import pdb
 import warnings
 warnings.filterwarnings('error') # 32 sec error
+import sympy
 
 class EKF:
     def __init__(self, state_vector_size, control_size, measurement_size):
@@ -32,6 +33,37 @@ class EKF:
         #
         self.state_data_history = []
         self.ground_truth_state_history = []
+        self.initialize_symbolic_models()
+    
+    def initialize_symbolic_models(self):
+        x,y,theta, v, w, dv, dw, dt, mix, miy, dr, df = sympy.symbols('x,y,theta, v, w, dv, dw, dt, mix, miy, dr, df')
+        self.motion_model = sympy.Matrix([[x + ((v+dv)/(w+dw))*sympy.sin(theta + (w + dw)*dt)], \
+            [y - ((v+dv)/(w+dw))*sympy.cos(theta + (w + dw)*dt)], \
+            [theta + (w + dw)*dt]])
+        self.motion_state = sympy.Matrix([x,y,theta])
+        self.simple_motion_model = sympy.Matrix([[x + v*dt], \
+            [y + v*dt], \
+            [theta]])
+        self.measurement_model = sympy.Matrix([[sympy.sqrt((x - mix)**2 + (y - miy)**2) + dr] , \
+            [sympy.atan((miy - y)/(mix - x)) - theta + df]])
+        self.meas_noise_components = sympy.Matrix([dr, df])
+        self.motion_noise_components = sympy.Matrix([dv,dw])
+        self.F_jacobian = self.motion_model.jacobian(self.motion_state)
+        self.F_simple_jacobian = self.simple_motion_model.jacobian(self.motion_state)
+        self.G_jacobian = self.motion_model.jacobian(self.motion_noise_components)
+        self.H_jacobian = self.measurement_model.jacobian(self.motion_state)
+
+    def substitute_values(self,model, state, control, params):
+        """
+        model - sympy model to substitute
+        state - state_vector [x,y,theta]
+        control - control_vector [v,w]
+        params - parameters_to_model [dt,dv,dw,dr,df]
+        """
+        result = model.subs({'x':state[0],'y':state[1],'theta':state[2],'v':control[0], 'w':control[1], \
+            'dt':params[0], 'dv':params[1], 'dw':params[2], 'dr':params[3], 'df':params[4]})
+        return np.array(result)
+
 
     def initialize_state_vector(self, msg): # Function for initializing state_vector
         #print("initialize state", self.state_vector.shape)
@@ -104,21 +136,25 @@ class EKF:
 
     def propagate_state(self):
         if self.control[1] != 0:
-            term = self.control[0]/self.control[1]
-            x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
-            y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
-            #x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
-            #y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            theta = self.state_vector[2] + self.control[1]*self.dt #self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
-            theta = self.wrap_to_pi(theta)
+            test = self.substitute_values(self.motion_model, self.state_vector,self.control,[self.dt,0,0,0,0]).astype(np.float32)
+            # term = self.control[0]/self.control[1]
+            # x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
+            # y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
+            # #x = self.state_vector[0] + (term)*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            # #y = self.state_vector[1] - (term)*np.cos(self.state_vector[2] + self.control[1]*self.dt)
+            # theta = self.state_vector[2] + self.control[1]*self.dt #self.wrap_to_pi(self.state_vector[2] + self.control[1]*self.dt) 
+            # theta = self.wrap_to_pi(theta)
 
         else:
-            term = self.control[0]
-            x = self.state_vector[0] + self.control[0]*self.dt
-            y = self.state_vector[1] + self.control[0]*self.dt
-            theta = self.state_vector[2]
+            test = self.substitute_values(self.simple_motion_model,self.state_vector,self.control,[self.dt,0,0,0,0]).astype(np.float32)
+            # term = self.control[0]
+            # x = self.state_vector[0] + self.control[0]*self.dt
+            # y = self.state_vector[1] + self.control[0]*self.dt
+            # theta = self.state_vector[2]
             
-        self.state_vector = np.array([x,y,theta])
+        self.state_vector[0] = test[0]
+        self.state_vector[1] = test[1]
+        self.state_vector[2] = self.wrap_to_pi(test[2])
         
 
 
@@ -149,13 +185,10 @@ class EKF:
 
     def motion_jacobian_state_vector(self):
         if self.control[1] != 0:
-            term = self.control[0]/self.control[1]
-            row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            result = self.substitute_values(self.F_jacobian, self.state_vector, self.control,[self.dt,0,0,0,0])
         else:
-            row1term3 = 0 #-self.control[0]*np.sin(self.state_vector[2] + self.dt)
-            row2term3 = 0 #-self.control[0]*np.cos(self.state_vector[2] + self.dt)
-        self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
+            result = self.substitute_values(self.F_simple_jacobian, self.state_vector, self.control,[self.dt,0,0,0,0])
+        self.motion_j_state = result
 
     def motion_jacobian_noise_components(self): # trailing zeros!
         if self.control[1] != 0: # if angular velocity is not zero
