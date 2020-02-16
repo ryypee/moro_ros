@@ -47,7 +47,7 @@ class EKF:
         self.simple_motion_model = sympy.Matrix([[x + v*dt], \
             [y + v*dt], \
             [theta]]) # the second function was 'y + v*dt'
-        self.measurement_model = sympy.Matrix([[sympy.sqrt((x - mix)**2 + (y - miy)**2) + dr] , \
+        self.sym_measurement_model = sympy.Matrix([[sympy.sqrt((x - mix)**2 + (y - miy)**2) + dr] , \
             [sympy.atan((miy - y)/(mix - x)) - theta + df]])
         self.meas_noise_components = sympy.Matrix([dr, df])
         self.motion_noise_components = sympy.Matrix([dv,dw])
@@ -55,7 +55,7 @@ class EKF:
         self.F_simple_jacobian = self.simple_motion_model.jacobian(self.motion_state)
         self.G_jacobian = self.motion_model.jacobian(self.motion_noise_components)
         self.G_simple_jacobian = self.simple_motion_model.jacobian(self.motion_noise_components)
-        self.H_jacobian = self.measurement_model.jacobian(self.motion_state)
+        self.H_jacobian = self.sym_measurement_model.jacobian(self.motion_state)
 
     def substitute_values(self,model, state, control, params):
         """
@@ -147,7 +147,8 @@ class EKF:
 
 
     def measurement_model(self,state):
-        result = self.substitute_values(self.measurement_model, state, self.control, [self.dt,0,0,0,0])
+        result = self.substitute_values(self.sym_measurement_model, state, self.control, [self.dt,0,0,0,0])
+        print("Got into model function!!!!")
         result[1] = self.wrap_to_pi(result[1])
         return np.array(result)
 
