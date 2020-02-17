@@ -161,9 +161,33 @@ class EKF:
 
     def motion_jacobian_state_vector(self):
         if self.control[1] != 0:
-            term = self.control[0]/self.control[1]
+            # Old model
+            '''term = self.control[0]/self.control[1]
             row1term3 = term*np.cos(self.state_vector[2] + self.control[1]*self.dt)
-            row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)
+            row2term3 = term*np.sin(self.state_vector[2] + self.control[1]*self.dt)'''
+            # New model
+            x = self.state_vector[0]
+            y = self.state_vector[1]
+            theta = self.state_vector[2]
+            v = self.control[0]
+            w = self.control[1]
+            dt = self.dt
+            dv = 0
+            dw = 0
+            row1term1 = 1
+            row1term2 = 0
+            row1term3 = row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
+                - (np.cos(theta)*(dv+v))/(dw + w)
+
+            row2term1 = 0
+            row2term2 = 1
+            row2term3 = (np.sin(theta + dt*(dw + w))*(dv+v))/(dw + w) \
+                - (np.sin(theta)*(dv+v))/(dw + w)
+
+            row3term1 = 0
+            row3term2 = 0
+            row3term3 = 1
+
         else:
             row1term3 = 0 #-self.control[0]*np.sin(self.state_vector[2] + self.dt)
             row2term3 = 0 #-self.control[0]*np.cos(self.state_vector[2] + self.dt)
@@ -171,6 +195,8 @@ class EKF:
 
     def motion_jacobian_noise_components(self): # trailing zeros!
         if self.control[1] != 0: # if angular velocity is not zero
+            # Old model
+            '''
             row1term1 = np.sin(self.state_vector[2] + self.control[1]*self.dt)/self.control[1] # checked
             
             #row1term2 = (-np.sin(self.state_vector[2] + self.control[1]*self.dt) + self.control[1]*self.dt*np.cos(self.control[1]*self.dt))/(self.control[1]**2) # check
@@ -186,7 +212,31 @@ class EKF:
             #row2term2 = -self.control[0]*(-np.cos(tempterm) - self.control[1]*self.dt*np.sin(tempterm)) # check
 
             row3term1 = 0
-            row3term2 = self.dt
+            row3term2 = self.dt'''
+            # New model
+            x = self.state_vector[0]
+            y = self.state_vector[1]
+            theta = self.state_vector[2]
+            v = self.control[0]
+            w = self.control[1]
+            dt = self.dt
+            dv = 0
+            dw = 0
+
+            dvpv = (dv + v)
+            dwpw = (dw + w)
+
+            row1term1 = (np.sin(theta + dt*dwpw)/dwpw) - (np.sin(theta)/dwpw)
+            row2term1 = (np.cos(theta)/dwpw) - (np.cos(theta + dt*dwpw)/dwpw)
+            row3term1 = 0
+
+            row1term2 = (np.sin(theta)*dvpv)/(dwpw**2) - ((np.sin(theta + dt*dwpw)*dvpv)/(dwpw**2)) + \
+                ((dt*np.cos(theta + dt*dwpw)*dvpv)/dwpw)
+            row2term2 = ((np.cos(theta + dt*dwpw)*dvpv)/(dwpw**2)) - ((np.cos(theta)*dvpv)/(dwpw**2)) + \
+                ((dt*np.sin(theta + dt*dwpw)*dvpv)/dwpw)
+            row3term2 = dt
+
+
         else:
             row1term1 = self.dt
             row1term2 = 0
