@@ -94,7 +94,8 @@ class EKF:
         try:
             self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         except RuntimeWarning:
-            pdb.set_trace()
+            pass
+            #pdb.set_trace()
         
         self.prev_state = self.state_vector
         print(self.state_vector)
@@ -114,8 +115,8 @@ class EKF:
 
         else:
             term = self.control[0]
-            x = self.state_vector[0] + self.control[0]*self.dt
-            y = self.state_vector[1] + self.control[0]*self.dt
+            x = self.state_vector[0] + self.control[0]*np.cos(self.state_vector[2])*self.dt #self.control[0]*self.dt
+            y = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
             theta = self.state_vector[2]
             
         self.state_vector = np.array([x,y,theta])

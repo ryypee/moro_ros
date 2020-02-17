@@ -27,7 +27,7 @@ def marker_callback(msg):
     for i in range(len(info)):
         #print("iteration", i)
         #print(ekf.state_vector.shape)
-        #ekf.update(info[i])
+        ekf.update(info[i])
         pass
     #pass
 
