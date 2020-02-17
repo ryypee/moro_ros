@@ -70,10 +70,12 @@ class EKF:
         self.calculate_cov()
 
     def update(self, msg): #
-        #pdb.set_trace()
-        #print('update state', self.state_vector.shape)
-        #msg.pose.position.[x y z]     msg.pose.orientation.[x y z w]   msg.ids
-        #print(msg.ids[0])
+        if np.isnan(self.state_vector[0]): #BUG debugging
+            print("found at start!!!")
+            pdb.set_trace() #BUG debugging
+
+        # print("state", self.state_vector) #BUG debugging
+        # print("covariance", self.cov_matrix) #BUG debugging
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
@@ -84,6 +86,11 @@ class EKF:
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
         bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.01).astype(np.float32)
+
+        if np.isnan(self.state_vector[0]): #BUG debugging
+            print("found in the middle!!!") #BUG debugging
+            pdb.set_trace() #BUG debugging
+
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
         expected_meas = self.measurement_model(self.state_vector)
         new_meas = self.measurement_model([pos_x, pos_y, theta])
@@ -94,11 +101,15 @@ class EKF:
         try:
             self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         except RuntimeWarning:
-            pass
-            #pdb.set_trace()
+            #pass
+            pdb.set_trace()
         
         self.prev_state = self.state_vector
-        print(self.state_vector)
+
+        if np.isnan(self.state_vector[0]): #BUG debugging
+            print("found at the end") #BUG debugging
+            pdb.set_trace() #BUG debugging
+        #print(self.state_vector)
         #print(self.cov_matrix)
 
 
