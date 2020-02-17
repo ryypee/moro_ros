@@ -97,6 +97,7 @@ class EKF:
        
         self.state_vector = self.state_vector + self.K.dot(tempterm)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
+        print(self.state_vector)
 
 
 
