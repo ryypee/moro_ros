@@ -37,14 +37,17 @@ class EKF:
         self.odometry_history = []
         self.count = 400
         self.saved = False
+        self.cov_parameters_history = []
         signal.signal(signal.SIGINT, self.save_before_close)
         signal.signal(signal.SIGTERM, self.save_before_close)
 
     def save_before_close(self,signum, free):
         with open('ground_truth.pickle', 'wb') as file:
-                pickle.dump(self.ground_truth_state_history,file)
+            pickle.dump(self.ground_truth_state_history,file)
         with open('states.pickle','wb') as file:
             pickle.dump(self.state_data_history,file)
+        with open('cov_params.pickle','wb') as file:
+            pickle.dump(self.cov_parameters_history,file)
 
     def initialize_state_vector(self, msg): # Function for initializing state_vector
         #print("initialize state", self.state_vector.shape)
@@ -228,8 +231,6 @@ class EKF:
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
     def save_data_for_analysis(self, msg):
-        #self.state_data_history = []
-        #self.ground_truth_state_history = []
         gtx = msg.pose.pose.position.x
         gty = msg.pose.pose.position.y
         gt_theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w])[2])
@@ -237,8 +238,13 @@ class EKF:
         ptx = self.state_vector[0][0]
         pty = self.state_vector[1][0]
         pt_theta = self.state_vector[2][0]
+        #
+        covx = self.cov_matrix[0][0]
+        covy = self.cov_matrix[1][1]
+        cov_theta = self.cov_matrix[2][2]
         self.state_data_history.append([ptx,pty,pt_theta])
         self.ground_truth_state_history.append([gtx,gty,gt_theta])
+        self.cov_parameters_history.append([covx,covy,cov_theta])
         '''elif len(self.ground_truth_state_history) == self.count and self.saved == False:
             with open('ground_truth.pickle', 'wb') as file:
                 pickle.dump(self.ground_truth_state_history,file)
