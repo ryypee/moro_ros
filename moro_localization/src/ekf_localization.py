@@ -17,7 +17,6 @@ gt_history = []
 def odom_callback(msg):
     rospy.loginfo("odometry message")
     ekf.predict(msg)
-    odometry_history.append(ekf.state_vector)
     #ekf.print_initials()
     #pass
 
@@ -29,12 +28,15 @@ def marker_callback(msg):
     for i in range(len(info)):
         ekf.update(info[i])
 
+def collect_data(msg):
+    ekf.save_data_for_analysis(msg)
+
 
 def ekf_loc():
     rospy.init_node('ekf_localization', anonymous=True)
     rospy.Subscriber("odom", Odometry, odom_callback)
     rospy.Subscriber("base_marker_detection", MarkerDetection, marker_callback)
-    #rospy.Subscriber("base_pose_ground_truth", Odometry, collect_data)
+    rospy.Subscriber("base_pose_ground_truth", Odometry, collect_data)
     rospy.spin()
 
 
