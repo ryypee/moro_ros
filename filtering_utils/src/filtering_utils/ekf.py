@@ -57,6 +57,7 @@ class EKF:
         self.state_vector[0] = x
         self.state_vector[1] = y
         self.state_vector[2] = self.wrap_to_pi(theta)
+        print("Inittial state",self.state_vector[0],self.state_vector[1], self.state_vector[2])
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
         self.gt.unregister() # unregister subscriber. Function is implemented only once.
 
@@ -89,6 +90,10 @@ class EKF:
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
+        # test
+        #rng = np.sqrt(pos_x**2 + pos_y**2)
+        rng = np.sqrt((self.cur_id[0])**2 + (self.cur_id[1])**2)
+        # test
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
         #print(quaternion_from_euler(0,0,theta))
         self.observation_jacobian_state_vector()
@@ -99,7 +104,8 @@ class EKF:
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
         expected_meas = self.measurement_model(self.state_vector)
-        new_meas = self.measurement_model([pos_x, pos_y, theta])
+        #new_meas = self.measurement_model([pos_x, pos_y, theta])
+        new_meas = np.array(([rng,theta]))
         
         tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
        
@@ -136,8 +142,8 @@ class EKF:
         py = self.cur_id[1]
 
         r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
-        #phi = np.arctan2(py-y, px-x) - theta    #Bearing
-        phi = np.arctan((py - y)/(px - x)) - theta 
+        phi = np.arctan2(py-y, px-x) - theta    #Bearing
+        #phi = np.arctan((py - y)/(px - x)) - theta 
 
         self.Z[0] = r
         self.Z[1] = phi 
