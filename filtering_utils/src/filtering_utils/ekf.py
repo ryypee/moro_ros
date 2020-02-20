@@ -86,7 +86,6 @@ class EKF:
         self.calculate_cov()
 
     def update(self, msg): #
-
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
@@ -104,7 +103,7 @@ class EKF:
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
         expected_meas = self.measurement_model(self.state_vector)
-        #new_meas = self.measurement_model([pos_x, pos_y, theta])
+        #new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
         new_meas = np.array(([rng,theta]))
         
         tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
