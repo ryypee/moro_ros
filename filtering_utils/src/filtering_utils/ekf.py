@@ -36,7 +36,8 @@ class EKF:
         self.ground_truth_state_history = []
         self.odometry_history = []
         self.count = 400
-        self.saved = False
+        #self.saved = False
+        self.initialized = False
         self.cov_parameters_history = []
         signal.signal(signal.SIGINT, self.save_before_close)
         signal.signal(signal.SIGTERM, self.save_before_close)
@@ -60,6 +61,7 @@ class EKF:
         print("Inittial state",self.state_vector[0],self.state_vector[1], self.state_vector[2])
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
         self.gt.unregister() # unregister subscriber. Function is implemented only once.
+        self.initialized = True
 
     def predict(self, odometry): # odometry added by me
         #TODO determine q-matrix
@@ -80,7 +82,7 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.1, 0],[0,.1])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.04, 0],[0,.01])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
@@ -91,7 +93,7 @@ class EKF:
         pos_y = msg.pose.position.y
         # test
         #rng = np.sqrt(pos_x**2 + pos_y**2)
-        rng = np.sqrt((self.cur_id[0])**2 + (self.cur_id[1])**2)
+        rng = np.sqrt(pos_x**2 + pos_y**2)
         # test
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
         #print(quaternion_from_euler(0,0,theta))

@@ -16,14 +16,17 @@ gt_history = []
 
 def odom_callback(msg):
     rospy.loginfo("odometry message")
-    ekf.predict(msg)
+    if ekf.initialized:
+        ekf.predict(msg)
+    else:
+        return
     #ekf.print_initials()
     #pass
 
 
 def marker_callback(msg):
     info = msg.markers
-    if len(info) == 0:
+    if len(info) == 0 or ekf.initialized == False:
         return
     for i in range(len(info)):
         ekf.update(info[i])
