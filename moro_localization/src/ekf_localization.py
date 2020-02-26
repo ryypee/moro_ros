@@ -29,9 +29,13 @@ def marker_callback(msg):
     if len(info) == 0 or ekf.initialized == False:
         return
     for i in range(len(info)):
+        #pass
         ekf.update(info[i])
 
 def collect_data(msg):
+    #print("Ground Truth")
+    #print(msg.pose.pose.position.x)
+    #print(msg.pose.pose.position.y)
     ekf.save_data_for_analysis(msg)
 
 

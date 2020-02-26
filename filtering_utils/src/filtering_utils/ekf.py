@@ -82,35 +82,45 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.04, 0],[0,.01])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.08, 0],[0,.05])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
+        print(self.state_vector)
 
     def update(self, msg): #
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
+        
+        # landmark position in robot frame
         pos_x = msg.pose.position.x
         pos_y = msg.pose.position.y
         # test
         #rng = np.sqrt(pos_x**2 + pos_y**2)
         rng = np.sqrt(pos_x**2 + pos_y**2)
         # test
+        #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
         #print(quaternion_from_euler(0,0,theta))
         self.observation_jacobian_state_vector()
         
+        #nominator
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.01).astype(np.float32)
+        #denominator
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.05).astype(np.float32) # WAS 0,01
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
+
         expected_meas = self.measurement_model(self.state_vector)
+
         new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
         #new_meas = np.array(([rng,theta]))
         
-        tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
+        #tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
+        tempterm = [rng - expected_meas[0],0]#,theta - expected_meas[1]] # 
        
         self.state_vector = self.state_vector + self.K.dot(tempterm)
+        #self.state_vector = self.state_vector + self.K*(tempterm)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         print(self.state_vector)
 
@@ -229,7 +239,8 @@ class EKF:
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
-        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
+        #self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
+        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[0,0,1])) # TEST PURPOSES, handling only range
 
     def print_initials(self):
         pass
