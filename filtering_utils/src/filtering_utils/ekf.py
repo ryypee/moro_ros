@@ -114,7 +114,7 @@ class EKF:
         expected_meas = self.measurement_model(self.state_vector)
 
         new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
-        #new_meas = np.array(([rng,theta]))
+        #new_meas = np.array(([rng,theta])) # comment
         
         #tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
         tempterm = [rng - expected_meas[0],0]#,theta - expected_meas[1]] # 
