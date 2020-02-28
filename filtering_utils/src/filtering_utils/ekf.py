@@ -117,7 +117,7 @@ class EKF:
         #new_meas = np.array(([rng,theta])) # comment
         
         #tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
-        tempterm = [rng - expected_meas[0],0]#,theta - expected_meas[1]] # 
+        tempterm = [[rng - expected_meas[0]],np.array([0])]  #,theta - expected_meas[1]] # 
        
         self.state_vector = self.state_vector + self.K.dot(tempterm)
         #self.state_vector = self.state_vector + self.K*(tempterm)
@@ -239,8 +239,8 @@ class EKF:
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
-        #self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
-        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[0,0,1])) # TEST PURPOSES, handling only range
+        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
+        #self.obs_j_state = np.array(([row1term1, row1term2, row1term3])) # TEST PURPOSES, handling only range
 
     def print_initials(self):
         pass
