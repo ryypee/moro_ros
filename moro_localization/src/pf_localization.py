@@ -3,11 +3,14 @@ import rospy
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from marker_msgs.msg import MarkerDetection
+from filtering_utils.pf import PF
 
+pf = PF(4,10,10)
 
 def odom_callback(msg):
     # rospy.loginfo("odometry message")
-    pass
+    pf.predict(msg)
+    #pass
 
 
 def marker_callback(msg):

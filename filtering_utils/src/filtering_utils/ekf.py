@@ -43,6 +43,7 @@ class EKF:
         signal.signal(signal.SIGTERM, self.save_before_close)
 
     def save_before_close(self,signum, free):
+        #pass
         with open('ground_truth.pickle', 'wb') as file:
             pickle.dump(self.ground_truth_state_history,file)
         with open('states.pickle','wb') as file:
@@ -82,7 +83,7 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.08, 0],[0,.05])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.04, 0],[0,.005])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
@@ -100,31 +101,40 @@ class EKF:
         # test
         #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
-        #print(quaternion_from_euler(0,0,theta))
+        theta = self.wrap_to_pi(np.pi/2 - theta) #FIXME find appropriate theta conversion
+        #meas_state = self.return_rotation_matrix(theta).dot(np.array(([pos_x - self.state_vector[0], pos_y - self.state_vector[1], theta - self.state_vector[2]])))
         self.observation_jacobian_state_vector()
+        #new_theta_meas = np.arctan2(self.cur_id[1] - self.state_vector[1], self.cur_id[0] - self.state_vector[0]) - self.state_vector[2]#theta
         
         #nominator
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
         #denominator
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.05).astype(np.float32) # WAS 0,01
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.01).astype(np.float32) # WAS 0,01
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
 
         expected_meas = self.measurement_model(self.state_vector)
 
-        new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
-        #new_meas = np.array(([rng,theta])) # comment
-        
-        #tempterm = np.array(([new_meas[0] - expected_meas[0], [new_meas[1] - expected_meas[1]]]))
-        tempterm = [rng - expected_meas[0],0]#,theta - expected_meas[1]] # 
+        #new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
+        tempterm = np.array(([rng - expected_meas[0], theta - expected_meas[1]])) #meas_state[2] - expected_meas[1]]))#,theta - expected_meas[1]] # 
        
         self.state_vector = self.state_vector + self.K.dot(tempterm)
         #self.state_vector = self.state_vector + self.K*(tempterm)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         print(self.state_vector)
 
+    def return_rotation_matrix(self, theta):
+        return np.array(([np.cos(theta), -np.sin(theta), 0],[np.sin(theta), np.cos(theta), 0],[0,0,1]))
 
+    def residual(self, a, b): #copied
+        """ compute residual (a-b) between measurements containing 
+        [range, bearing]. Bearing is normalized to [-pi, pi)"""
+        y = a - b
+        y[1] = y[1] % (2 * np.pi)    # force in range [0, 2 pi)
+        if y[1] > np.pi:             # move to [-pi, pi)
+            y[1] -= 2 * np.pi
+        return y
 
 
     def propagate_state(self):
@@ -139,7 +149,7 @@ class EKF:
             term = self.control[0]
             x = self.state_vector[0] + self.control[0]*np.cos(self.state_vector[2])*self.dt #self.control[0]*self.dt
             y = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
-            theta = self.state_vector[2]
+            theta = self.wrap_to_pi(self.state_vector[2])
             
         self.state_vector = np.array([x,y,theta])
         
@@ -157,7 +167,7 @@ class EKF:
         #phi = np.arctan((py - y)/(px - x)) - theta 
 
         self.Z[0] = r
-        self.Z[1] = phi 
+        self.Z[1] = self.wrap_to_pi(phi) #FIXME added for example
         return self.Z
 
 
@@ -239,8 +249,8 @@ class EKF:
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
-        #self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
-        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[0,0,1])) # TEST PURPOSES, handling only range
+        self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
+        #self.obs_j_state = np.array(([row1term1, row1term2, 0],[0,0,0])) # TEST PURPOSES, handling only range
 
     def print_initials(self):
         pass
