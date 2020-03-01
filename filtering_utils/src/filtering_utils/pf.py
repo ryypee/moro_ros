@@ -47,9 +47,6 @@ class PF:
     def propagate_state(self):
         std = [0.05, 0.04]
         N = len(self.particles)
-        # update heading
-        self.particles[:, 2] += self.control[1] + (np.random.randn(N) * std[1]) # 0,04 angular command noise
-        self.particles[:, 2] %= 2 * np.pi
 
         # move in the (noisy) commanded direction
         distL = (self.control[0] * self.dt) + (np.random.randn(N) * std[0]) # 0,05 linear command noise
@@ -58,11 +55,11 @@ class PF:
             term = (self.control[0] + np.random.randn(1)[0]*std[0])/(self.control[1] + np.random.randn(1)[0]*std[1])
             self.particles[:,0] = self.particles[:,0] - term*np.sin(self.particles[:,2])+ term*np.sin(self.particles[:,2]+(self.dt * distA))
             self.particles[:,1] = self.particles[:,1] + term*np.cos(self.particles[:,2])- term*np.cos(self.particles[:,2]+(self.dt * distA))
-            #theta = self.state_vector[2] + self.control[1]*self.dt
-            #theta = self.wrap_to_pi(theta)
+            self.particles[:, 2] += self.control[1] + (np.random.randn(N) * std[1]) # 0,04 angular command noise
+            self.particles[:, 2] %= 2 * np.pi
 
         else:
-            term = self.control[0]
+            term = self.control[0] + np.random.randn(1)[0]*std[0]
             self.particles[:,0] = self.particles[:,0] + self.control[0]*np.cos(self.particles[:,2])*self.dt + (np.random.randn(N) * std[0]) #self.control[0]*self.dt
             self.particles[:,1] = self.particles[:,1] + self.control[0]*np.sin(self.particles[:,2])*self.dt + (np.random.randn(N) * std[0]) #self.control[0]*self.dt
             #theta = self.wrap_to_pi(self.state_vector[2])
