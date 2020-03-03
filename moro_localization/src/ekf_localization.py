@@ -15,7 +15,7 @@ state_history = []
 gt_history = []
 
 def odom_callback(msg):
-    rospy.loginfo("odometry message")
+    #rospy.loginfo("odometry message")
     if ekf.initialized:
         ekf.predict(msg)
     else:

@@ -5,7 +5,7 @@ from nav_msgs.msg import Odometry
 from marker_msgs.msg import MarkerDetection
 from filtering_utils.pf import PF
 
-pf = PF(4,10,10)
+pf = PF(1000,10,10)
 
 def odom_callback(msg):
     # rospy.loginfo("odometry message")
@@ -15,7 +15,8 @@ def odom_callback(msg):
 
 def marker_callback(msg):
     # rospy.loginfo("Marker message")
-    pass
+    pf.update(msg)
+    #pass
 
 
 def pf_loc():
