@@ -14,9 +14,10 @@ def odom_callback(msg):
 
 
 def marker_callback(msg):
-    # rospy.loginfo("Marker message")
-    pf.update(msg)
-    #pass
+    info = msg.markers
+    if len(info) == 0:# or ekf.initialized == False:
+        return
+    pf.update(info)
 
 
 def pf_loc():
