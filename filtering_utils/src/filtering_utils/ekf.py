@@ -271,4 +271,9 @@ class EKF:
         cov_theta = self.cov_matrix[2][2]
         self.state_data_history.append([ptx,pty,pt_theta])
         self.ground_truth_state_history.append([gtx,gty,gt_theta])
+<<<<<<< HEAD
         self.cov_parameters_history.append([covx,covy,cov_theta])
+=======
+        self.cov_parameters_history.append([covx,covy,cov_theta])
+        
+>>>>>>> a7a84d3b740f003e00c610635eb299321f4c0bd4
