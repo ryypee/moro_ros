@@ -3,6 +3,7 @@ import scipy as scipy
 from numpy.random import uniform
 import scipy.stats
 import rospy
+from tf.transformations import euler_from_quaternion
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -23,6 +24,7 @@ class PF:
         self.beacons = {1:[7.3, 3.0], 2:[1,1],3:[9,9],4:[1,8],5:[5.8,8]}
         self.R = 0.05
         self.GT_POS = []
+        self.mu = np.empty((1,3))
 
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize)
@@ -56,7 +58,9 @@ class PF:
     
     def get_gt(self, msg):
         #print(msg.pose.pose.position.x)
-        self.GT_POS = [msg.pose.pose.position.x, msg.pose.pose.position.y]
+        theta = msg.pose.pose.orientation
+        theta = euler_from_quaternion([theta.x,theta.y,theta.z, theta.w])[2]
+        self.GT_POS = [msg.pose.pose.position.x, msg.pose.pose.position.y, theta]
 
 
     def create_particles(self):
@@ -75,7 +79,7 @@ class PF:
         self.prev_time_stamp = odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9) # timestamps
         self.control[0] = v
         self.control[1] = w
-        self.q = np.array(([0.04, 0],[0,.05]))
+        self.q = np.array(([0.04, 0],[0,.005]))
         self.propagate_state()
         #print(np.mean(self.particles[:,0]), np.mean(self.particles[:,1]))
 
@@ -115,26 +119,24 @@ class PF:
         if self.initialized == False:
             return
         for z in msg:
-            cur_beacons[z.ids[0]] = [z.pose.position.x, z.pose.position.y]
+            cur_beacons[z.ids[0]] = [z.pose.position.x, z.pose.position.y] # beacons now seen by the robot
         self.weights.fill(1.)
 
         for id in cur_beacons.keys():
             #print(id, cur_beacons[id])
             measurement = np.linalg.norm(cur_beacons[id])
-            distance = np.linalg.norm(self.particles[:,0:2] - self.beacons[id], axis=1)
+            distance = np.linalg.norm(self.particles[:,0:2] - self.beacons[id], axis=1)+np.random.randn(1)[0]
             self.weights *= scipy.stats.norm(distance, self.R).pdf(measurement)
         self.weights += 1.e-300      # avoid round-off to zero
         self.weights /= sum(self.weights) # normalize
-        if self.neff < 0.5:
+        if self.neff < 0.3:
             self.resample()
         self.estimate()
-        if self.neff() < 0.5:
-            self.resample()
     
     def estimate(self):
         pos = self.particles[:,0:2]
-        mu = np.average(pos, weights=self.weights, axis=0)
-        print(mu)
+        self.mu = np.average(pos, weights=self.weights, axis=0)
+        print('Estimate:',self.mu, 'GT:', self.GT_POS)
 
     def resample(self):
         cumulative_sum = np.cumsum(self.weights)
@@ -148,6 +150,9 @@ class PF:
 
     def neff(self):
         return 1. / np.sum(np.square(self.weights))
+
+    def wrap_to_pi(self,angle):
+        return (angle + np.pi) % (2 * np.pi) - np.pi
 
     
 
