@@ -87,7 +87,9 @@ class EKF:
         #
         self.propagate_state()
         self.calculate_cov()
-        #print(self.state_vector)
+
+        print("PREDICT:")
+        print(self.state_vector)
 
     def update(self, msg): #
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
@@ -101,36 +103,26 @@ class EKF:
         # test
         #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
-        #theta  = (np.pi/2) - theta
-        #delta = np.array(([pos_x - self.state_vector[0], pos_y - self.state_vector[1]]))
-        #theta = np.arctan2(delta[1], delta[0])
-        #meas_state = self.return_rotation_matrix(theta).dot(np.array(([pos_x - self.state_vector[0], pos_y - self.state_vector[1], theta - self.state_vector[2]])))
+
         self.observation_jacobian_state_vector()
-        #new_theta_meas = np.arctan2(self.cur_id[1] - self.state_vector[1], self.cur_id[0] - self.state_vector[0]) - self.state_vector[2]#theta
         
         #nominator
-        floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
+        floor = self.cov_matrix.dot(self.obs_j_state).astype(np.float32)
+        
         
         #denominator
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + 0.01).astype(np.float32) # palce self.R diag(0.1 0.01)
-        #bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + 0.01).astype(np.float32) # WAS 0,01
+        bottom = (self.obs_j_state.transpose().dot(self.cov_matrix).dot(self.obs_j_state) + 0.01).astype(np.float32) # palce self.R diag(0.1 0.01)
 
         #self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
         self.K = floor*(1/bottom) # K is 3x2
 
         expected_meas = self.measurement_model(self.state_vector)
-        #expected_meas = self.measurement_model(self.state_vector)[0]
 
-        #new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
-        #tempterm = np.array(([rng - expected_meas[0]])) #meas_state[2] - expected_meas[1]]))#,theta - expected_meas[1]] # 
         tempterm = np.array(([rng - expected_meas[0]]))
        
-        #self.state_vector = self.state_vector + self.K.dot(tempterm)
-        #print("Shape is:", self.K.shape)
         self.state_vector = self.state_vector + self.K * tempterm
-        #self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
-        #self.cov_matrix = self.K*self.obs_j_state
-        print("State vector is:")
+
+        print("UPDATE:")
         print(self.state_vector)
 
 
@@ -243,12 +235,12 @@ class EKF:
     def observation_jacobian_state_vector(self):
         row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
         row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term3 = 0
+        row1term3 = np.array([0])
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1
-        #self.obs_j_state = np.array(([row1term1, row1term2, row1term3],[row2term1,row2term2,row2term3]))
-        self.obs_j_state = np.array(([row1term1, row1term2, 0]))#,[row2term1,row2term2,0])) # TEST PURPOSES, handling only range
+        self.obs_j_state = np.array(([row1term1, row1term2, row1term3]))
+        #self.obs_j_state = np.array(([row1term1, row1term2, 0]))#,[row2term1,row2term2,0])) # TEST PURPOSES, handling only range
         #self.obs_j_state = np.array(([]))
 
     def print_initials(self):
@@ -271,9 +263,5 @@ class EKF:
         cov_theta = self.cov_matrix[2][2]
         self.state_data_history.append([ptx,pty,pt_theta])
         self.ground_truth_state_history.append([gtx,gty,gt_theta])
-<<<<<<< HEAD
         self.cov_parameters_history.append([covx,covy,cov_theta])
-=======
-        self.cov_parameters_history.append([covx,covy,cov_theta])
-        
->>>>>>> a7a84d3b740f003e00c610635eb299321f4c0bd4
+   
