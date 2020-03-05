@@ -28,26 +28,7 @@ class PF:
 
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize)
-        self.check = rospy.Subscriber('base_pose_ground_truth', Odometry, self.get_gt)
-
-        # self.fig = plt.figure()
-        # self.ax = plt.axes(xlim=(0,10), ylim=(0,10))
-        # self.line = plt.scatter([],[])
-        # self.anim = FuncAnimation(self.fig, self.plot_update, init_func=self.plot_init,
-        #                        frames=200, interval=20, blit=True)
-        # plt.show()
-
-    # def plot_init(self):
-    #     self.ax.set_xlim(0, 10)
-    #     self.ax.set_ylim(0, 10)
-    #     pathcol.set_offsets([[], []])
-    #     return [pathcol]
-
-    # def plot_update(self, frame):
-        
-    #     return self.line
-
-        
+        self.check = rospy.Subscriber('base_pose_ground_truth', Odometry, self.get_gt)        
 
     def initialize(self, msg):
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
@@ -84,16 +65,6 @@ class PF:
         #print(np.mean(self.particles[:,0]), np.mean(self.particles[:,1]))
 
     def propagate_state(self):
-        '''std = [0.05, 0.04]
-        N = len(self.particles)
-        # update heading
-        self.particles[:, 2] += self.control[1] + (np.random.randn(N) * std[0])
-        self.particles[:, 2] %= 2 * np.pi
-
-        # move in the (noisy) commanded direction
-        dist = (self.control[0] * self.dt) + (np.random.randn(N) * std[1])
-        self.particles[:, 0] += np.cos(self.particles[:, 2]) * dist
-        self.particles[:, 1] += np.sin(self.particles[:, 2]) * dist'''
         std = [0.05, 0.04]
         N = len(self.particles)
 
