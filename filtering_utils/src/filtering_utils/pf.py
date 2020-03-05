@@ -22,7 +22,7 @@ class PF:
         self.dt = 0
         self.control = np.empty((2,1))
         self.beacons = {1:[7.3, 3.0], 2:[1,1],3:[9,9],4:[1,8],5:[5.8,8]}
-        self.R = 0.05
+        self.R = 0.1
         self.GT_POS = []
         self.mu = np.empty((1,3))
 
