@@ -108,7 +108,7 @@ class EKF:
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
         #denominator
-        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + np.eye(2)*0.05).astype(np.float32) # WAS 0,01
+        bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + 0.05).astype(np.float32) # WAS 0,01
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
 
