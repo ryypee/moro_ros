@@ -140,7 +140,7 @@ class EKF:
     def process_angle(self,x,y,a):
         rot_matrix = np.array(([np.cos(a), -np.sin(a)],[np.sin(a), np.cos(a)]))
         xy = np.array([x, y]).T
-        new_xy = rot_matrix.dot(xy)
+        new_xy = rot_matrix.transpose().dot(xy)
         bearing = np.arctan2(new_xy[1], new_xy[0]) + a
         return bearing
 
