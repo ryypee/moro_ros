@@ -19,11 +19,18 @@ def marker_callback(msg):
         return
     pf.update(info)
 
+def collect_data(msg):
+    #print("Ground Truth")
+    #print(msg.pose.pose.position.x)
+    #print(msg.pose.pose.position.y)
+    pf.save_data_for_analysis(msg)
+
 
 def pf_loc():
     rospy.init_node('pf_localization', anonymous=True)
     rospy.Subscriber("odom", Odometry, odom_callback)
     rospy.Subscriber("base_marker_detection", MarkerDetection, marker_callback)
+    rospy.Subscriber("base_pose_ground_truth", Odometry, collect_data)
     rospy.spin()
 
 

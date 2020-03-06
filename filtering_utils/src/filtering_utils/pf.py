@@ -4,6 +4,8 @@ from numpy.random import uniform
 import scipy.stats
 import rospy
 from tf.transformations import euler_from_quaternion
+import pickle
+import signal
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -28,7 +30,22 @@ class PF:
 
         from nav_msgs.msg import Odometry
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize)
-        self.check = rospy.Subscriber('base_pose_ground_truth', Odometry, self.get_gt)        
+        self.check = rospy.Subscriber('base_pose_ground_truth', Odometry, self.get_gt)
+
+        self.state_data_history = []
+        self.ground_truth_state_history = []
+        self.odometry_history = []
+        signal.signal(signal.SIGINT, self.save_before_close)
+        signal.signal(signal.SIGTERM, self.save_before_close)
+
+    def save_before_close(self,signum, free):
+        #pass
+        with open('ground_truth_pf.pickle', 'wb') as file:
+            pickle.dump(self.ground_truth_state_history,file)
+        with open('states_pf.pickle','wb') as file:
+            pickle.dump(self.state_data_history,file)
+        #with open('cov_params.pickle','wb') as file:
+            #pickle.dump(self.cov_parameters_history,file)        
 
     def initialize(self, msg):
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
@@ -107,7 +124,7 @@ class PF:
     def estimate(self):
         pos = self.particles[:,0:2]
         self.mu = np.average(pos, weights=self.weights, axis=0)
-        print('Estimate:',self.mu, 'GT:', self.GT_POS)
+        print('Estimate:',self.mu[1])
 
     def resample(self):
         cumulative_sum = np.cumsum(self.weights)
@@ -124,6 +141,19 @@ class PF:
 
     def wrap_to_pi(self,angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def save_data_for_analysis(self, msg):
+        self.estimate()
+        gtx = msg.pose.pose.position.x
+        gty = msg.pose.pose.position.y
+        gt_theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w])[2])
+        #
+        ptx = self.mu[0]
+        pty = self.mu[1]
+        #pt_theta = self.mu[2]
+        #
+        self.state_data_history.append([ptx,pty])
+        self.ground_truth_state_history.append([gtx,gty,gt_theta])
 
     
 
