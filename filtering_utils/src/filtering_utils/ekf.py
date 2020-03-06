@@ -84,7 +84,7 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.04, 0],[0,.005])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.04**2, 0],[0,.005**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
@@ -98,6 +98,7 @@ class EKF:
         pos_y = msg.pose.position.y
         # test
         #rng = np.sqrt(pos_x**2 + pos_y**2)
+        #new_xy = 
         rng = np.sqrt(pos_x**2 + pos_y**2)
         # test
         #bearing
@@ -111,7 +112,7 @@ class EKF:
         #new_theta_meas = np.arctan2(self.cur_id[1] - self.state_vector[1], self.cur_id[0] - self.state_vector[0]) - self.state_vector[2]#theta
         
         #nominator
-        print(self.state_vector.shape)
+        #print(self.state_vector.shape)
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
         #denominator
@@ -136,6 +137,7 @@ class EKF:
         #self.cov_matrix = self.K*self.obs_j_state
         print("State vector is:")
         print(self.state_vector)
+        #print(self.cov_matrix)
 
     def process_angle(self,x,y,a):
         rot_matrix = np.array(([np.cos(a), -np.sin(a)],[np.sin(a), np.cos(a)]))
@@ -173,7 +175,6 @@ class EKF:
 
         r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
         phi = np.arctan2(py-y, px-x) - theta    #Bearing
-        #phi = np.arctan((py - y)/(px - x)) - theta 
 
         self.Z[0] = r
         self.Z[1] = self.wrap_to_pi(phi) #FIXME added for example
@@ -276,9 +277,9 @@ class EKF:
         pty = self.state_vector[1][0]
         pt_theta = self.state_vector[2][0]
         #
-        covx = self.cov_matrix[0][0]
-        covy = self.cov_matrix[1][1]
-        cov_theta = self.cov_matrix[2][2]
+        covx =  np.sqrt(self.cov_matrix[0][0])
+        covy = np.sqrt(self.cov_matrix[1][1])
+        cov_theta = np.sqrt(self.cov_matrix[2][2])
         self.state_data_history.append([ptx,pty,pt_theta])
         self.ground_truth_state_history.append([gtx,gty,gt_theta])
         self.cov_parameters_history.append([covx,covy,cov_theta])
