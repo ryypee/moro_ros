@@ -7,7 +7,7 @@ from nav_msgs.msg import Odometry
 import rospy
 import pickle
 import signal
-#import pdb
+import pdb
 #import warnings
 #warnings.filterwarnings('error')
 
@@ -23,6 +23,7 @@ class EKF:
         self.obs_j_state = np.zeros((measurement_size, state_vector_size))
         self.Q = np.zeros((state_vector_size, state_vector_size))
         self.beacons = {1:[7.3, 3.0], 2:[1,1],3:[9,9],4:[1,8],5:[5.8,8]}
+        self.new_meas = np.empty((1,3))
         #
         self.control = np.zeros((2,1))
         self.Z = np.zeros((2,1))
@@ -84,11 +85,11 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.04**2, 0],[0,.005**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.4**2, 0],[0,.05**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
-        #print(self.state_vector)
+        print(self.state_vector)
 
     def update(self, msg): #
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
@@ -98,42 +99,30 @@ class EKF:
         pos_y = msg.pose.position.y
         # test
         #rng = np.sqrt(pos_x**2 + pos_y**2)
-        #new_xy = 
         rng = np.sqrt(pos_x**2 + pos_y**2)
         # test
         #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
         theta = self.process_angle(pos_x, pos_y, theta)
-        #theta  = (np.pi/2) - theta
-        #delta = np.array(([pos_x - self.state_vector[0], pos_y - self.state_vector[1]]))
-        #theta = np.arctan2(delta[1], delta[0])
-        #meas_state = self.return_rotation_matrix(theta).dot(np.array(([pos_x - self.state_vector[0], pos_y - self.state_vector[1], theta - self.state_vector[2]])))
         self.observation_jacobian_state_vector()
-        #new_theta_meas = np.arctan2(self.cur_id[1] - self.state_vector[1], self.cur_id[0] - self.state_vector[0]) - self.state_vector[2]#theta
-        
         #nominator
-        #print(self.state_vector.shape)
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
         
         #denominator
+        # obs_j_state 2x3, cov_matrix 3x3, obs_j_state 3x2
         bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + self.R).astype(np.float32) # palce self.R diag(0.1 0.01)
-        #bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + 0.01).astype(np.float32) # WAS 0,01
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
-        #self.K = floor*(1/bottom) # K is 3x2
 
         expected_meas = self.measurement_model(self.state_vector)
         new_meas = np.array(([rng, theta]))
-        #expected_meas = self.measurement_model(self.state_vector)[0]
 
-        #new_meas = self.measurement_model([pos_x, pos_y, theta]) # THAT WORKS BETTER SO FAR
-        #tempterm = np.array(([rng - expected_meas[0]])) #meas_state[2] - expected_meas[1]]))#,theta - expected_meas[1]] # 
-        innovation = (([new_meas[0] - expected_meas[0], new_meas[1] - expected_meas[1]]))
-       
-        #self.state_vector = self.state_vector + self.K.dot(tempterm)
-        #print("Shape is:", self.K.shape)
+        innovation = np.array(([new_meas[0] - expected_meas[0], new_meas[1] - expected_meas[1]]))
+
         self.state_vector = self.state_vector + self.K.dot(innovation)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
+        # if self.cov_matrix[0][0] > 50:
+        #     pdb.set_trace()
         #self.cov_matrix = self.K*self.obs_j_state
         print("State vector is:")
         print(self.state_vector)
@@ -144,6 +133,7 @@ class EKF:
         xy = np.array([x, y]).T
         new_xy = rot_matrix.transpose().dot(xy)
         bearing = np.arctan2(new_xy[1], new_xy[0]) + a
+        self.new_meas = np.array(([new_xy[0], new_xy[1], bearing]))
         return bearing
 
 
@@ -201,13 +191,21 @@ class EKF:
             dw = 0
             row1term1 = 1
             row1term2 = 0
-            row1term3 = row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
+            row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.cos(theta)*(dv+v))/(dw + w)
+            #TEST
+            row1term3 = (self.control[0]/self.control[1])*np.cos(self.state_vector[2]) \
+                - (self.control[0]/self.control[1])*np.cos(self.state_vector[2] * self.control[1]*self.dt)
+            #TEST
 
             row2term1 = 0
             row2term2 = 1
             row2term3 = (np.sin(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.sin(theta)*(dv+v))/(dw + w)
+            #TEST
+            row2term3 = (self.control[0]/self.control[1])*np.sin(self.state_vector[2]) \
+                - (self.control[0]/self.control[1])*np.sin(self.state_vector[2] * self.control[1]*self.dt)
+            #TEST
 
             row3term1 = 0
             row3term2 = 0
@@ -258,7 +256,16 @@ class EKF:
         row1term3 = 0
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
-        row2term3 = -1
+        row2term3 = -1 # <=== "WORKING" implementation
+        '''qt = (self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2
+
+        row1term1 = (self.cur_id[0] - self.state_vector[0])/np.sqrt(qt)
+        row1term2 = (self.new_meas[1] - self.state_vector[1])/np.sqrt(qt)
+        row1term3 = 0
+
+        row2term1 = (self.state_vector[1] - self.new_meas[1])/qt
+        row2term2 = (self.cur_id[0] - self.state_vector[0])/qt
+        row2term3 = -1'''
         jacobian = [[row1term1, row1term2, row1term3],[row2term1, row2term2, row2term3]] #!
         self.obs_j_state = np.array(jacobian)
 
