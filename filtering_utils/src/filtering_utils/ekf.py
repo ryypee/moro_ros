@@ -85,7 +85,7 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.4**2, 0],[0,.05**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.4**2, 0],[0,.001**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
