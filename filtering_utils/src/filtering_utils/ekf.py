@@ -89,7 +89,7 @@ class EKF:
         #
         self.propagate_state()
         self.calculate_cov()
-        print(self.state_vector)
+        #print(self.state_vector)
 
     def update(self, msg): #
         self.cur_id = self.beacons[msg.ids[0]] # coordinates of current transmitter
@@ -118,14 +118,15 @@ class EKF:
         new_meas = np.array(([rng, theta]))
 
         innovation = np.array(([new_meas[0] - expected_meas[0], new_meas[1] - expected_meas[1]]))
+        #innovation = np.array(([abs(new_meas[0] - expected_meas[0]), abs(new_meas[1] - expected_meas[1])]))
 
         self.state_vector = self.state_vector + self.K.dot(innovation)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         # if self.cov_matrix[0][0] > 50:
         #     pdb.set_trace()
         #self.cov_matrix = self.K*self.obs_j_state
-        print("State vector is:")
         print(self.state_vector)
+        print()
         #print(self.cov_matrix)
 
     def process_angle(self,x,y,a):
@@ -141,18 +142,25 @@ class EKF:
     def propagate_state(self):
         if self.control[1] != 0:
             term = self.control[0]/self.control[1]
-            x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
-            y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
-            theta = self.state_vector[2] + self.control[1]*self.dt
-            theta = self.wrap_to_pi(theta)
+            #x = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
+            self.state_vector[0] = self.state_vector[0] - term*np.sin(self.state_vector[2])+ term*np.sin(self.state_vector[2]+self.control[1]*self.dt)
+            #y = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
+            self.state_vector[1] = self.state_vector[1] + term*np.cos(self.state_vector[2])- term*np.cos(self.state_vector[2]+self.control[1]*self.dt)
+            #theta = self.state_vector[2] + self.control[1]*self.dt
+            self.state_vector[2] = self.state_vector[2] + self.control[1]*self.dt
+            #theta = self.wrap_to_pi(theta)
+            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2])
 
         else:
             term = self.control[0]
-            x = self.state_vector[0] + self.control[0]*np.cos(self.state_vector[2])*self.dt #self.control[0]*self.dt
-            y = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
-            theta = self.wrap_to_pi(self.state_vector[2])
+            #x = self.state_vector[0] + self.control[0]*np.cos(self.state_vector[2])*self.dt #self.control[0]*self.dt
+            self.state_vector[0] = self.state_vector[0] + self.control[0]*np.cos(self.state_vector[2])*self.dt #self.control[0]*self.dt
+            #y = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
+            self.state_vector[1] = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
+            #theta = self.wrap_to_pi(self.state_vector[2])
+            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2])
             
-        self.state_vector = np.array([x,y,theta])
+        #self.state_vector = np.array([x,y,theta])
         
 
     def measurement_model(self,state):
@@ -191,19 +199,11 @@ class EKF:
             row1term2 = 0
             row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.cos(theta)*(dv+v))/(dw + w)
-            #TEST
-            #row1term3 = (self.control[0]/self.control[1])*np.cos(self.state_vector[2]) \
-            #   - (self.control[0]/self.control[1])*np.cos(self.state_vector[2] * self.control[1]*self.dt)
-            #TEST
 
             row2term1 = 0
             row2term2 = 1
             row2term3 = (np.sin(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.sin(theta)*(dv+v))/(dw + w)
-            #TEST
-            #row2term3 = (self.control[0]/self.control[1])*np.sin(self.state_vector[2]) \
-            #    - (self.control[0]/self.control[1])*np.sin(self.state_vector[2] * self.control[1]*self.dt)
-            #TEST
 
             row3term1 = 0
             row3term2 = 0
