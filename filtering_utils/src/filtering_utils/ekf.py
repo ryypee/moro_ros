@@ -155,7 +155,6 @@ class EKF:
         self.state_vector = np.array([x,y,theta])
         
 
-
     def measurement_model(self,state):
         x = state[0]
         y = state[1]
@@ -193,8 +192,8 @@ class EKF:
             row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.cos(theta)*(dv+v))/(dw + w)
             #TEST
-            row1term3 = (self.control[0]/self.control[1])*np.cos(self.state_vector[2]) \
-                - (self.control[0]/self.control[1])*np.cos(self.state_vector[2] * self.control[1]*self.dt)
+            #row1term3 = (self.control[0]/self.control[1])*np.cos(self.state_vector[2]) \
+            #   - (self.control[0]/self.control[1])*np.cos(self.state_vector[2] * self.control[1]*self.dt)
             #TEST
 
             row2term1 = 0
@@ -202,8 +201,8 @@ class EKF:
             row2term3 = (np.sin(theta + dt*(dw + w))*(dv+v))/(dw + w) \
                 - (np.sin(theta)*(dv+v))/(dw + w)
             #TEST
-            row2term3 = (self.control[0]/self.control[1])*np.sin(self.state_vector[2]) \
-                - (self.control[0]/self.control[1])*np.sin(self.state_vector[2] * self.control[1]*self.dt)
+            #row2term3 = (self.control[0]/self.control[1])*np.sin(self.state_vector[2]) \
+            #    - (self.control[0]/self.control[1])*np.sin(self.state_vector[2] * self.control[1]*self.dt)
             #TEST
 
             row3term1 = 0
@@ -211,11 +210,12 @@ class EKF:
             row3term3 = 1
 
         else:
-            row1term3 = 0
-            row2term3 = 0
+            row1term3 = -self.control[0]*self.dt*np.sin(self.state_vector[2])
+            row2term3 = self.control[0]*self.dt*np.cos(self.state_vector[2])
         self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
 
     def motion_jacobian_noise_components(self):
+        #TODO check row1term2
         if self.control[1] != 0: # if angular velocity is not zero
             x = self.state_vector[0]
             y = self.state_vector[1]
@@ -241,9 +241,10 @@ class EKF:
 
 
         else:
-            row1term1 = self.dt
+            #TODO Linear model wrong
+            row1term1 = np.cos(self.state_vector[2])*self.dt
             row1term2 = 0
-            row2term1 = self.dt
+            row2term1 = np.sin(self.state_vector[2])*self.dt
             row2term2 = 0
             row3term1 = 0
             row3term2 = 0
@@ -256,15 +257,6 @@ class EKF:
         row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
         row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
         row2term3 = -1 # <=== "WORKING" implementation
-        '''qt = (self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2
-
-        row1term1 = (self.cur_id[0] - self.state_vector[0])/np.sqrt(qt)
-        row1term2 = (self.new_meas[1] - self.state_vector[1])/np.sqrt(qt)
-        row1term3 = 0
-
-        row2term1 = (self.state_vector[1] - self.new_meas[1])/qt
-        row2term2 = (self.cur_id[0] - self.state_vector[0])/qt
-        row2term3 = -1'''
         jacobian = [[row1term1, row1term2, row1term3],[row2term1, row2term2, row2term3]] #!
         self.obs_j_state = np.array(jacobian)
 
