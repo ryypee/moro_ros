@@ -173,11 +173,10 @@ class EKF:
 
 
     def calculate_cov(self):
-        self.Q = self.motion_j_noise.dot(self.q).dot(self.motion_j_noise.transpose())
-        self.cov_matrix = self.motion_j_state.dot(self.cov_matrix).dot(self.motion_j_state.transpose()) + self.Q
-
         self.motion_jacobian_state_vector()
         self.motion_jacobian_noise_components()
+        self.Q = self.motion_j_noise.dot(self.q).dot(self.motion_j_noise.transpose())
+        self.cov_matrix = self.motion_j_state.dot(self.cov_matrix).dot(self.motion_j_state.transpose()) + self.Q
 
     def motion_jacobian_state_vector(self):
         if self.control[1] != 0:
