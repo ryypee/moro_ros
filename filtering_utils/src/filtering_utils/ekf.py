@@ -73,6 +73,7 @@ class EKF:
         # Get v,w from odometry msg
         w = odometry.twist.twist.angular.z
         v = odometry.twist.twist.linear.x
+
         self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp
         #print(self.dt)
         #pdb.set_trace()
@@ -149,7 +150,7 @@ class EKF:
             #theta = self.state_vector[2] + self.control[1]*self.dt
             self.state_vector[2] = self.state_vector[2] + self.control[1]*self.dt
             #theta = self.wrap_to_pi(theta)
-            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2])
+            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2]) # WORKING
 
         else:
             term = self.control[0]
@@ -158,7 +159,7 @@ class EKF:
             #y = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
             self.state_vector[1] = self.state_vector[1] + self.control[0]*np.sin(self.state_vector[2])*self.dt #self.control[0]*self.dt
             #theta = self.wrap_to_pi(self.state_vector[2])
-            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2])
+            self.state_vector[2] = self.wrap_to_pi(self.state_vector[2]) # WORKING
             
         #self.state_vector = np.array([x,y,theta])
         
