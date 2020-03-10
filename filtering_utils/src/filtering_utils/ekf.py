@@ -85,7 +85,7 @@ class EKF:
         self.control = np.array(([v,w]))
         #
         # determine q-matrix aka process noise
-        self.q = np.array(([0.4**2, 0],[0,.001**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
+        self.q = np.array(([0.1**2, 0],[0,.001**2])) #FIXME FOR TEST PURPOSES [0.04, 0],[0,0.001]
         #
         self.propagate_state()
         self.calculate_cov()
@@ -186,85 +186,71 @@ class EKF:
         self.cov_matrix = self.motion_j_state.dot(self.cov_matrix).dot(self.motion_j_state.transpose()) + self.Q
 
     def motion_jacobian_state_vector(self):
-        if self.control[1] != 0:
-            x = self.state_vector[0]
-            y = self.state_vector[1]
-            theta = self.state_vector[2]
-            v = self.control[0]
-            w = self.control[1]
-            dt = self.dt
-            dv = 0
-            dw = 0
-            row1term1 = 1
-            row1term2 = 0
-            row1term3 = (np.cos(theta + dt*(dw + w))*(dv+v))/(dw + w) \
-                - (np.cos(theta)*(dv+v))/(dw + w)
-
-            row2term1 = 0
-            row2term2 = 1
-            row2term3 = (np.sin(theta + dt*(dw + w))*(dv+v))/(dw + w) \
-                - (np.sin(theta)*(dv+v))/(dw + w)
-
-            row3term1 = 0
-            row3term2 = 0
-            row3term3 = 1
-
+        v = self.control[0]
+        w = self.control[1]
+        theta = self.state_vector[2]
+        term = v/w
+        dt = self.dt
+        if np.isclose(w,0):
+            # Linear motion model
+            self.motion_j_state[0,:] = np.array([1,0,-dt*v*np.sin(theta)])
+            self.motion_j_state[1,:] = np.array([0,1,dt*v*np.cos(theta)])
+            self.motion_j_state[2,:] = np.array([0,0,1])
         else:
-            row1term3 = -self.control[0]*self.dt*np.sin(self.state_vector[2])
-            row2term3 = self.control[0]*self.dt*np.cos(self.state_vector[2])
-        self.motion_j_state = np.array(([1,0,row1term3],[0,1,row2term3],[0,0,1]))
+            # Non-linear motion model
+            self.motion_j_state[0,:] = np.array([1,0,term*(np.cos(theta + dt*w) - np.cos(theta))])
+            self.motion_j_state[1,:] = np.array([0,1,term*(np.sin(theta + dt*w) - np.sin(theta))])
+            self.motion_j_state[2,:] = np.array([0,0,1])
+
 
     def motion_jacobian_noise_components(self):
         #TODO check row1term2
-        if self.control[1] != 0: # if angular velocity is not zero
-            x = self.state_vector[0]
-            y = self.state_vector[1]
-            theta = self.state_vector[2]
-            v = self.control[0]
-            w = self.control[1]
-            dt = self.dt
-            dv = 0
-            dw = 0
-
-            dvpv = (dv + v)
-            dwpw = (dw + w)
-
-            row1term1 = (np.sin(theta + dt*dwpw)/dwpw) - (np.sin(theta)/dwpw)
-            row2term1 = (np.cos(theta)/dwpw) - (np.cos(theta + dt*dwpw)/dwpw)
-            row3term1 = 0
-
-            row1term2 = (np.sin(theta)*dvpv)/(dwpw**2) - ((np.sin(theta + dt*dwpw)*dvpv)/(dwpw**2)) + \
-                ((dt*np.cos(theta + dt*dwpw)*dvpv)/dwpw)
-            row2term2 = ((np.cos(theta + dt*dwpw)*dvpv)/(dwpw**2)) - ((np.cos(theta)*dvpv)/(dwpw**2)) + \
-                ((dt*np.sin(theta + dt*dwpw)*dvpv)/dwpw)
-            row3term2 = dt
-
-
+        v = self.control[0]
+        w = self.control[1]
+        theta = self.state_vector[2][0]
+        dt = self.dt
+        if np.isclose(w,0):
+            # linear motion model
+            self.motion_j_noise[0,:] = np.array([np.cos(theta)*dt, 0])
+            self.motion_j_noise[1,:] = np.array([np.sin(theta)*dt, 0])
+            self.motion_j_noise[2,:] = np.array([0, 0])
         else:
-            #TODO Linear model wrong
-            row1term1 = np.cos(self.state_vector[2])*self.dt
-            row1term2 = 0
-            row2term1 = np.sin(self.state_vector[2])*self.dt
-            row2term2 = 0
-            row3term1 = 0
-            row3term2 = 0
-        self.motion_j_noise = np.array(([row1term1, row1term2],[row2term1,row2term2],[row3term1,row3term2]))
+            sigma1 = np.sin(theta + dt*w)
+            sigma2 = np.cos(theta + dt*w)
+            #term1 = (1/w)*(sigma1 - np.sin(theta))
+            #term2 = (v/w**2)*(np.sin(theta) - sigma1) + (dt*v*sigma2)/w
+            #print(term1, term2)
+            self.motion_j_noise[0,:] = np.array([(1/w)*(sigma1 - np.sin(theta)), \
+                (v/w**2)*(np.sin(theta) - sigma1) + (dt*v*sigma2)/w])
+            #self.motion_j_noise[0,:] = np.array([term1, term2])
+            self.motion_j_noise[1,:] = np.array([(1/w)*(np.cos(theta) - sigma2), (v/w**2)*(sigma2 - np.cos(theta)) + (dt*v*sigma1)/w])
+            self.motion_j_noise[2,:] = np.array([0,dt])
+            # non-linear motion model
 
     def observation_jacobian_state_vector(self):
-        row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term3 = 0
-        row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
-        row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
-        row2term3 = -1 # <=== "WORKING" implementation
-        jacobian = [[row1term1, row1term2, row1term3],[row2term1, row2term2, row2term3]] #!
-        self.obs_j_state = np.array(jacobian)
+        mx = self.cur_id[0]
+        my = self.cur_id[1]
+        x = self.state_vector[0][0]
+        y = self.state_vector[1][0]
+        a = (x - mx)**2 + (y - my)**2
+        b = np.sqrt(a)
+        self.obs_j_state[0,:] = np.array([(x-mx)/b, (y-my)/b, 0])
+        self.obs_j_state[1,:] = np.array([(my-y)/a, (x-mx)/a, -1])
 
     def print_initials(self):
         pass
 
     def wrap_to_pi(self,angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi
+        # temp = angle
+        # while (temp > np.pi):
+        #     temp = temp - (np.pi*2)
+        
+        # while (temp < -np.pi):
+        #     temp = temp + (np.pi*2)
+
+        # return temp
+
 
     def save_data_for_analysis(self, msg):
         gtx = msg.pose.pose.position.x
