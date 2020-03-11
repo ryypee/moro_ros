@@ -74,6 +74,7 @@ class EKF:
         w = odometry.twist.twist.angular.z
         v = odometry.twist.twist.linear.x
 
+
         self.dt = (odometry.header.stamp.secs + odometry.header.stamp.nsecs*(10**-9))-self.prev_time_stamp
         #print(self.dt)
         #pdb.set_trace()
@@ -173,10 +174,11 @@ class EKF:
         py = self.cur_id[1]
 
         r = np.sqrt((px-x)**2 + (py-y)**2)      #Distance
-        phi = np.arctan2(py-y, px-x) - self.wrap_to_pi(theta)    #Bearing
+        phi = np.arctan2(py-y, px-x) - self.wrap_to_pi(theta)   #Bearing
 
         self.Z[0] = r
-        self.Z[1] = self.wrap_to_pi(phi) #FIXME added for example
+        self.Z[1] = phi #FIXME added for example
+        #self.observation_jacobian_state_vector()
         return self.Z
 
 
