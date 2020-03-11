@@ -105,6 +105,7 @@ class EKF:
         #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
         theta = self.process_angle(pos_x, pos_y, theta)
+        rng = np.sqrt(self.new_meas[0]**2 + self.new_meas[1]**2) #FIXME test (self.new_meas is used instead of pox_x, pos_y)
         self.observation_jacobian_state_vector()
         #nominator
         floor = self.cov_matrix.dot(self.obs_j_state.transpose()).astype(np.float32)
