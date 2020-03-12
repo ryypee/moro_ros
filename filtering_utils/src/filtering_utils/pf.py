@@ -39,11 +39,11 @@ class PF:
         signal.signal(signal.SIGTERM, self.save_before_close)
 
     def save_before_close(self,signum, free):
-        #pass
-        with open('ground_truth_pf.pickle', 'wb') as file:
-            pickle.dump(self.ground_truth_state_history,file)
-        with open('states_pf.pickle','wb') as file:
-            pickle.dump(self.state_data_history,file)
+        pass
+        # with open('ground_truth_pf.pickle', 'wb') as file:
+        #     pickle.dump(self.ground_truth_state_history,file)
+        # with open('states_pf.pickle','wb') as file:
+        #     pickle.dump(self.state_data_history,file)
         #with open('cov_params.pickle','wb') as file:
             #pickle.dump(self.cov_parameters_history,file)        
 
