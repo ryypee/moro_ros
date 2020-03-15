@@ -105,9 +105,7 @@ class ProbabilisticRoadmap(object):
             ndarray: Inflated occupancy grid. Same size as og.
         """
         new_map = copy(og)
-        #new_map = np.zeros((200,200), dtype=np.uint8)
         shape = og.shape
-        #print(shape)
         new_radius = radius / self._resolution
         
         obstacles = np.nonzero(og == OCCUPIED)
@@ -116,7 +114,6 @@ class ProbabilisticRoadmap(object):
             y = obstacles[1][i]
             rr,cc = circle(x,y,new_radius, shape)
             new_map[rr,cc] = OCCUPIED
-        #print(new_map)
         return new_map
 
     def _draw_sample(self):
@@ -125,7 +122,6 @@ class ProbabilisticRoadmap(object):
         Returns:
             ndarray: Sampled coordinates, size (2,).
         """
-        # TODO
         sample = np.random.random_sample(2)*10
         return sample
 
@@ -140,9 +136,7 @@ class ProbabilisticRoadmap(object):
         Returns:
             bool: Returns True if there are no obstacles between the points.
         """
-        # TODO
         dxy = p2 - p1
-        #print(dxy)
         if np.isclose(dxy[0],0): # if kx+b doesn't perform
             x = p2[0]
             points_to_check = np.zeros((int(dxy[1]*10+2), 2))
@@ -180,7 +174,6 @@ class ProbabilisticRoadmap(object):
             else:
                 self.nodes[i,:] = sample.T
                 i += 1
-        # TEST
         for i in range(self.nodes.shape[0]):
             for j in range(self.nodes.shape[0]):
                 node1,node2 = self.nodes[i], self.nodes[j]
@@ -193,9 +186,7 @@ class ProbabilisticRoadmap(object):
                         length = np.linalg.norm(node2-node1)
                         self.graph[i,j] = length
                         self.graph[j,i] = length
-        #print(self.graph)      
-                
-        # TEST
+
         
     def _is_close(self,p, threshold):
        test = sum([np.linalg.norm(p - t) <= threshold for t in self.nodes])
