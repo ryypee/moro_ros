@@ -20,22 +20,18 @@ def odom_callback(msg):
         ekf.predict(msg)
     else:
         return
-    #ekf.print_initials()
-    #pass
 
 
 def marker_callback(msg):
     info = msg.markers
     if len(info) == 0 or ekf.initialized == False:
+        print("No beacons seen!!!!")
         return
     for i in range(len(info)):
         #pass
         ekf.update(info[i])
 
 def collect_data(msg):
-    #print("Ground Truth")
-    #print(msg.pose.pose.position.x)
-    #print(msg.pose.pose.position.y)
     ekf.save_data_for_analysis(msg)
 
 

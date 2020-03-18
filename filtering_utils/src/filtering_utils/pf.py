@@ -4,6 +4,8 @@ from numpy.random import uniform
 import scipy.stats
 import rospy
 from tf.transformations import euler_from_quaternion
+import pickle
+import signal
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -22,7 +24,7 @@ class PF:
         self.dt = 0
         self.control = np.empty((2,1))
         self.beacons = {1:[7.3, 3.0], 2:[1,1],3:[9,9],4:[1,8],5:[5.8,8]}
-        self.R = 0.05
+        self.R = 0.1
         self.GT_POS = []
         self.mu = np.empty((1,3))
 
@@ -30,24 +32,20 @@ class PF:
         self.gt = rospy.Subscriber('base_pose_ground_truth', Odometry, self.initialize)
         self.check = rospy.Subscriber('base_pose_ground_truth', Odometry, self.get_gt)
 
-        # self.fig = plt.figure()
-        # self.ax = plt.axes(xlim=(0,10), ylim=(0,10))
-        # self.line = plt.scatter([],[])
-        # self.anim = FuncAnimation(self.fig, self.plot_update, init_func=self.plot_init,
-        #                        frames=200, interval=20, blit=True)
-        # plt.show()
+        self.state_data_history = []
+        self.ground_truth_state_history = []
+        self.odometry_history = []
+        signal.signal(signal.SIGINT, self.save_before_close)
+        signal.signal(signal.SIGTERM, self.save_before_close)
 
-    # def plot_init(self):
-    #     self.ax.set_xlim(0, 10)
-    #     self.ax.set_ylim(0, 10)
-    #     pathcol.set_offsets([[], []])
-    #     return [pathcol]
-
-    # def plot_update(self, frame):
-        
-    #     return self.line
-
-        
+    def save_before_close(self,signum, free):
+        pass
+        # with open('ground_truth_pf.pickle', 'wb') as file:
+        #     pickle.dump(self.ground_truth_state_history,file)
+        # with open('states_pf.pickle','wb') as file:
+        #     pickle.dump(self.state_data_history,file)
+        #with open('cov_params.pickle','wb') as file:
+            #pickle.dump(self.cov_parameters_history,file)        
 
     def initialize(self, msg):
         self.prev_time_stamp = msg.header.stamp.secs + msg.header.stamp.nsecs*(10**-9)
@@ -84,16 +82,6 @@ class PF:
         #print(np.mean(self.particles[:,0]), np.mean(self.particles[:,1]))
 
     def propagate_state(self):
-        '''std = [0.05, 0.04]
-        N = len(self.particles)
-        # update heading
-        self.particles[:, 2] += self.control[1] + (np.random.randn(N) * std[0])
-        self.particles[:, 2] %= 2 * np.pi
-
-        # move in the (noisy) commanded direction
-        dist = (self.control[0] * self.dt) + (np.random.randn(N) * std[1])
-        self.particles[:, 0] += np.cos(self.particles[:, 2]) * dist
-        self.particles[:, 1] += np.sin(self.particles[:, 2]) * dist'''
         std = [0.05, 0.04]
         N = len(self.particles)
 
@@ -136,7 +124,7 @@ class PF:
     def estimate(self):
         pos = self.particles[:,0:2]
         self.mu = np.average(pos, weights=self.weights, axis=0)
-        print('Estimate:',self.mu, 'GT:', self.GT_POS)
+        print('Estimate:',self.mu[1])
 
     def resample(self):
         cumulative_sum = np.cumsum(self.weights)
@@ -153,6 +141,19 @@ class PF:
 
     def wrap_to_pi(self,angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def save_data_for_analysis(self, msg):
+        self.estimate()
+        gtx = msg.pose.pose.position.x
+        gty = msg.pose.pose.position.y
+        gt_theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w])[2])
+        #
+        ptx = self.mu[0]
+        pty = self.mu[1]
+        #pt_theta = self.mu[2]
+        #
+        self.state_data_history.append([ptx,pty])
+        self.ground_truth_state_history.append([gtx,gty,gt_theta])
 
     
 
