@@ -98,38 +98,20 @@ class EKF:
         rng = np.sqrt(pos_x**2 + pos_y**2)
         #bearing
         theta = self.wrap_to_pi(euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])[2])
-<<<<<<< HEAD
-
-        self.observation_jacobian_state_vector()
-        
-=======
         theta = self.process_angle(pos_x, pos_y, theta)
         #rng = np.sqrt(self.new_meas[0]**2 + self.new_meas[1]**2) #FIXME test (self.new_meas is used instead of pox_x, pos_y)
         self.observation_jacobian_state_vector()
->>>>>>> beebd2538c6070ac13889b1a958e651db4ce91c1
         #nominator
         floor = self.cov_matrix.dot(self.obs_j_state).astype(np.float32)
         
         
         #denominator
-<<<<<<< HEAD
-        bottom = (self.obs_j_state.transpose().dot(self.cov_matrix).dot(self.obs_j_state) + 0.01).astype(np.float32) # palce self.R diag(0.1 0.01)
-=======
         # obs_j_state 2x3, cov_matrix 3x3, obs_j_state 3x2
         bottom = (self.obs_j_state.dot(self.cov_matrix).dot(self.obs_j_state.transpose()) + self.R).astype(np.float32) # palce self.R diag(0.1 0.01)
->>>>>>> beebd2538c6070ac13889b1a958e651db4ce91c1
 
         self.K = floor.dot(np.linalg.inv(bottom)) # K is 3x2
 
         expected_meas = self.measurement_model(self.state_vector)
-<<<<<<< HEAD
-
-        tempterm = np.array(([rng - expected_meas[0]]))
-       
-        self.state_vector = self.state_vector + self.K * tempterm
-
-        print("UPDATE:")
-=======
         new_meas = np.array(([rng, theta]))
 
         innovation = np.array(([new_meas[0] - expected_meas[0], new_meas[1] - expected_meas[1]]))
@@ -137,7 +119,6 @@ class EKF:
         self.state_vector = self.state_vector + self.K.dot(innovation)
         self.cov_matrix = (np.eye(3) - self.K.dot(self.obs_j_state)).dot(self.cov_matrix)
         
->>>>>>> beebd2538c6070ac13889b1a958e651db4ce91c1
         print(self.state_vector)
         print()
         
@@ -237,17 +218,6 @@ class EKF:
             self.motion_j_noise[2,:] = np.array([0,dt])
 
     def observation_jacobian_state_vector(self):
-<<<<<<< HEAD
-        row1term1 = (self.state_vector[0] - self.cur_id[0])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term2 = (self.state_vector[1] - self.cur_id[1])/np.sqrt((self.state_vector[0] - self.cur_id[0])**2 + (self.state_vector[1] - self.cur_id[1])**2) #checked
-        row1term3 = np.array([0])
-        row2term1 = (self.cur_id[1] - self.state_vector[1]) / ((self.cur_id[0] - self.state_vector[0])**2 + (self.cur_id[1] - self.state_vector[1])**2) #checked
-        row2term2 = -1/((((self.cur_id[1]-self.state_vector[1])**2)/(self.cur_id[0]-self.state_vector[0]))+(self.cur_id[0]- self.state_vector[0])) #checked
-        row2term3 = -1
-        self.obs_j_state = np.array(([row1term1, row1term2, row1term3]))
-        #self.obs_j_state = np.array(([row1term1, row1term2, 0]))#,[row2term1,row2term2,0])) # TEST PURPOSES, handling only range
-        #self.obs_j_state = np.array(([]))
-=======
         mx = self.cur_id[0]
         my = self.cur_id[1]
         x = self.state_vector[0][0]
@@ -256,7 +226,6 @@ class EKF:
         b = np.sqrt(a)
         self.obs_j_state[0,:] = np.array([(x-mx)/b, (y-my)/b, 0])
         self.obs_j_state[1,:] = np.array([(my-y)/a, (x-mx)/a, -1])
->>>>>>> beebd2538c6070ac13889b1a958e651db4ce91c1
 
     def print_initials(self):
         pass
